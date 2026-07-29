@@ -1,0 +1,20 @@
+{
+  "name": "jido-heyawari-kun",
+  "version": "1.0.0",
+  "description": "柏島ヴィレッジ 自動部屋割り君 - ねっぱんCSVから部屋割り表を自動生成するWebアプリ",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.14.0",
+    "csv-parse": "^5.5.6",
+    "exceljs": "^4.4.0",
+    "express": "^4.19.2",
+    "iconv-lite": "^0.6.3",
+    "multer": "^1.4.5-lts.1"
+  }
+}

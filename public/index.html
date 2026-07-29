@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>自動部屋割り君 - 柏島ヴィレッジ</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <h1>🏠 自動部屋割り君</h1>
+  <div class="toolbar">
+    <label class="upload-btn">
+      CSVアップロード
+      <input type="file" id="csvFile" accept=".csv,.CSV" hidden>
+    </label>
+    <input type="date" id="datePicker">
+    <button id="genBtn" class="primary">この日の部屋割りを生成/更新</button>
+    <button id="forceGenBtn" class="danger" title="手動編集も含めて全て再生成します">強制再生成</button>
+    <button id="exportBtn">Excelダウンロード</button>
+    <button id="multiDayBtn">3日間ビュー（印刷用）</button>
+    <span id="saveStatus" class="save-status"></span>
+  </div>
+</header>
+
+<div id="issuesBox" class="issues-box" hidden>
+  <h3>⚠ 要確認事項</h3>
+  <ul id="issuesList"></ul>
+</div>
+
+<main id="app">
+  <p class="hint">CSVをアップロードし、日付を選んで「生成/更新」を押してください。セルは直接クリックして編集でき、変更は自動で保存されます。</p>
+</main>
+
+<div id="multiDayView" class="multi-day-view" hidden>
+  <div class="multi-day-toolbar no-print">
+    <button id="backToEditBtn">← 編集画面に戻る</button>
+    <button id="printBtn">印刷する</button>
+  </div>
+  <div id="multiDayPages"></div>
+</div>
+
+<template id="roomCellTemplate">
+  <div class="room-cell">
+    <div class="room-no"></div>
+    <input class="guest-name" placeholder="（空室）">
+    <input class="site" placeholder="サイト">
+    <input class="amount" placeholder="金額" type="number">
+    <select class="plan-label"><option value="">食事プラン未選択</option></select>
+    <div class="pax-row">
+      <label>大人<input class="pax-adults" type="number" min="0"></label>
+      <label>子供<input class="pax-children" type="number" min="0"></label>
+      <label>幼児<input class="pax-infants" type="number" min="0"></label>
+    </div>
+    <textarea class="memo" placeholder="メモ" rows="2"></textarea>
+    <div class="cell-footer">
+      <span class="review-badge" hidden>要確認</span>
+      <button class="clear-btn" title="このセルを空にする">✕</button>
+    </div>
+  </div>
+</template>
+
+<script src="app.js"></script>
+</body>
+</html>

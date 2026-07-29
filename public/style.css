@@ -1,0 +1,164 @@
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, "Hiragino Sans", "Yu Gothic", sans-serif;
+  margin: 0;
+  background: #f4f6f8;
+  color: #222;
+}
+.topbar {
+  background: #1f4e78;
+  color: white;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.topbar h1 { font-size: 18px; margin: 0; }
+.toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+button, .upload-btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: none;
+  background: #fff;
+  color: #1f4e78;
+  cursor: pointer;
+  font-size: 14px;
+}
+button.primary { background: #ffcc66; color: #333; font-weight: bold; }
+button.danger { background: #e57373; color: white; }
+input[type="date"] { padding: 6px; border-radius: 6px; border: none; }
+.save-status { font-size: 13px; opacity: 0.9; min-width: 90px; }
+
+.issues-box {
+  background: #fff8e1;
+  border-left: 5px solid #f0ad4e;
+  margin: 12px 20px;
+  padding: 10px 16px;
+  border-radius: 6px;
+}
+.issues-box h3 { margin: 4px 0; font-size: 14px; }
+.issues-box li { font-size: 13px; margin: 4px 0; }
+
+main { padding: 16px 20px 60px; }
+.hint { color: #777; font-size: 14px; }
+
+.floor-section { margin-bottom: 24px; }
+.floor-title {
+  font-weight: bold;
+  margin: 10px 0 6px;
+  font-size: 15px;
+}
+.floor-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 6px;
+}
+.floor-grid.floor1F { grid-template-columns: repeat(9, 1fr); }
+.floor-grid.lockups { grid-template-columns: repeat(2, minmax(160px, 1fr)); max-width: 400px; }
+
+.room-cell {
+  background: white;
+  border-radius: 8px;
+  padding: 8px;
+  border: 2px solid #ddd;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 130px;
+}
+.room-cell.floor1 { border-color: #cde3b0; }
+.room-cell.floor2 { border-color: #b9d3ea; }
+.room-cell.lockup { border-color: #e6c9a0; }
+.room-cell.review { background: #fff2cc; border-color: #ffc000; }
+.room-cell.empty .guest-name { color: #aaa; }
+.room-cell.closet { background: #eee; color: #999; align-items: center; justify-content: center; }
+
+.room-no { font-weight: bold; font-size: 14px; color: #333; }
+.room-cell input {
+  border: 1px solid #eee;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
+  width: 100%;
+}
+.room-cell .guest-name { font-size: 13px; font-weight: 600; }
+.room-cell select.plan-label { font-size: 11px; padding: 3px 4px; }
+.floor-grid.rv-grid { grid-template-columns: minmax(240px, 480px); }
+.room-cell.rv { border-color: #b9a6d1; background: #faf8fd; }
+.pax-row { display: flex; gap: 4px; }
+.pax-row label { font-size: 10px; color: #888; display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.pax-row input { width: 100%; padding: 2px 4px; font-size: 11px; }
+.room-cell textarea.memo {
+  font-size: 11px;
+  resize: vertical;
+  min-height: 32px;
+  font-family: inherit;
+}
+.cell-footer { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
+.review-badge {
+  background: #ffc000;
+  color: #333;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: bold;
+}
+.clear-btn {
+  background: none;
+  color: #999;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+.legend { display: flex; gap: 14px; align-items: center; margin: 8px 0 16px; font-size: 13px; }
+.legend-swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; margin-right: 4px; vertical-align: middle; }
+
+/* ---- 3日間ビュー（印刷用・A4縦） ---- */
+.multi-day-view { background: white; }
+.multi-day-toolbar {
+  padding: 10px 20px;
+  background: #1f4e78;
+  display: flex;
+  gap: 10px;
+}
+.multi-day-toolbar button { background: #fff; color: #1f4e78; }
+
+.day-page {
+  width: 190mm;
+  min-height: 270mm;
+  margin: 10mm auto;
+  padding: 10mm;
+  background: white;
+  box-shadow: 0 0 6px rgba(0,0,0,0.15);
+  page-break-after: always;
+}
+.day-page h2 { font-size: 15px; border-left: 5px solid #1f4e78; padding-left: 8px; margin: 0 0 10px; }
+.ro-section { margin-bottom: 10px; }
+.ro-title { font-weight: bold; font-size: 12px; margin-bottom: 4px; }
+.ro-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 3px;
+}
+.ro-grid-rest { grid-template-columns: repeat(3, minmax(0,1fr)); max-width: 60%; }
+.ro-cell {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 4px;
+  font-size: 9px;
+  min-height: 50px;
+}
+.ro-cell.empty { background: #f2f2f2; color: #999; }
+.ro-cell.review { background: #fff2cc; border-color: #ffc000; }
+.ro-cell.closet { background: #e0e0e0; text-align: center; color: #999; }
+.ro-no { font-weight: bold; font-size: 10px; }
+.ro-name { font-weight: 600; }
+.ro-site, .ro-pax { color: #555; }
+.ro-issues { font-size: 10px; color: #a00; margin-top: 6px; }
+
+@media print {
+  .no-print, .topbar, .multi-day-toolbar { display: none !important; }
+  body { background: white; }
+  .day-page { box-shadow: none; margin: 0 auto; page-break-after: always; }
+  @page { size: A4 portrait; margin: 10mm; }
+}
