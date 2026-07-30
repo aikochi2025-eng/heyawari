@@ -238,6 +238,19 @@ async function saveAssignments(dateStr, rooms, issues, { preserveManual = true }
     existingManual = new Set(res.rows.map((r) => r.room_no));
   }
   const stmts = [];
+
+  // 自動生成のたびに、今回の割当結果に含まれない「固定されていない(is_manual=0)」既存行は
+  // 前回以前の世代のゴースト行として残ってしまう(例: 同じ予約が空室状況の違いで別の部屋に
+  // 割り当てられ直した場合、古い部屋の行が消えずに残り、同じ予約が2部屋に重複表示される)。
+  // 再生成のたびに、今回の結果に含まれない非固定行は削除してから新しい結果を書き込む。
+  const newRoomNos = new Set(Object.keys(rooms).map((r) => parseInt(r, 10)));
+  const existingRes = await client.execute({ sql: `SELECT room_no, is_manual FROM assignments WHERE date = ?`, args: [dateStr] });
+  for (const row of existingRes.rows) {
+    if (row.is_manual) continue; // 固定中の部屋は消さない
+    if (newRoomNos.has(row.room_no)) continue; // 今回の結果に含まれる部屋は後続のUPSERTで更新される
+    stmts.push({ sql: `DELETE FROM assignments WHERE date = ? AND room_no = ?`, args: [dateStr, row.room_no] });
+  }
+
   for (const [roomNoStr, cell] of Object.entries(rooms)) {
     const roomNo = parseInt(roomNoStr, 10);
     if (preserveManual && existingManual.has && existingManual.has(roomNo)) continue;
