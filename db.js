@@ -75,6 +75,7 @@ async function init() {
   const migrations = [
     `ALTER TABLE reservations ADD COLUMN other_details TEXT`,
     `ALTER TABLE assignments ADD COLUMN memo TEXT`,
+    `ALTER TABLE assignments ADD COLUMN meal_counts TEXT`,
   ];
   for (const sql of migrations) {
     try { await client.execute(sql); } catch (e) { /* 既に列がある場合は無視 */ }
@@ -176,6 +177,7 @@ async function getAssignmentsForDate(dateStr) {
       children: row.children,
       infants: row.infants,
       memo: row.memo,
+      mealCounts: row.meal_counts ? JSON.parse(row.meal_counts) : {},
       checkin: row.checkin,
       checkout: row.checkout,
       nights: row.nights,
@@ -184,6 +186,7 @@ async function getAssignmentsForDate(dateStr) {
       groupKey: row.group_key,
       isContinuing: !!row.is_continuing,
       isManual: !!row.is_manual,
+      locked: !!row.is_manual,
     };
   }
   const issuesRes = await client.execute({ sql: `SELECT * FROM issues WHERE date = ? ORDER BY seq`, args: [dateStr] });
@@ -203,12 +206,13 @@ async function saveAssignments(dateStr, rooms, issues, { preserveManual = true }
     if (preserveManual && existingManual.has && existingManual.has(roomNo)) continue;
     stmts.push({
       sql: `INSERT INTO assignments
-        (date, room_no, reservation_id, guest_name, site, amount, plan_label, plan_name_raw, adults, children, infants, memo, checkin, checkout, nights, needs_review, review_reason, group_key, is_continuing, is_manual, updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)
+        (date, room_no, reservation_id, guest_name, site, amount, plan_label, plan_name_raw, adults, children, infants, memo, meal_counts, checkin, checkout, nights, needs_review, review_reason, group_key, is_continuing, is_manual, updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)
         ON CONFLICT(date, room_no) DO UPDATE SET
           reservation_id=excluded.reservation_id, guest_name=excluded.guest_name, site=excluded.site,
           amount=excluded.amount, plan_label=excluded.plan_label, plan_name_raw=excluded.plan_name_raw,
           adults=excluded.adults, children=excluded.children, infants=excluded.infants, memo=excluded.memo,
+          meal_counts=excluded.meal_counts,
           checkin=excluded.checkin, checkout=excluded.checkout, nights=excluded.nights,
           needs_review=excluded.needs_review, review_reason=excluded.review_reason,
           group_key=excluded.group_key, is_continuing=excluded.is_continuing, updated_at=excluded.updated_at`,
@@ -216,6 +220,7 @@ async function saveAssignments(dateStr, rooms, issues, { preserveManual = true }
         dateStr, roomNo, cell.reservationId || null, cell.guestName || null, cell.site || null,
         cell.amount || 0, cell.planLabel || null, cell.planNameRaw || null,
         cell.adults || 0, cell.children || 0, cell.infants || 0, cell.memo || null,
+        JSON.stringify(cell.mealCounts || {}),
         cell.checkin || null, cell.checkout || null, cell.nights || 0,
         cell.needsReview ? 1 : 0, cell.reviewReason || null, cell.groupKey || null,
         cell.isContinuing ? 1 : 0, new Date().toISOString(),
@@ -243,23 +248,27 @@ function applyTotalCap(adults, children, infants, cap) {
   return { adults: a, children: c, infants: i };
 }
 
+// 手動編集の保存。参考アプリの挙動に合わせ、編集しただけでは「固定」にはしない
+// （固定は setLocked を明示的に呼んだ時だけ）。そのため、次回のCSV取込→自動生成で
+// 上書きされたくない場合は、画面の固定ボタンを押す必要がある。
 async function updateCellManual(dateStr, roomNo, fields) {
   const cap = getRoomCapacity(roomNo);
   const clamp = (v, max) => (v === undefined ? undefined : Math.max(0, Math.min(parseInt(v, 10) || 0, max)));
   let adults = clamp(fields.adults, cap.adults);
   let children = clamp(fields.children, cap.children);
   let infants = clamp(fields.infants, cap.infants);
+  const mealCountsJson = fields.mealCounts !== undefined ? JSON.stringify(fields.mealCounts || {}) : undefined;
 
   const existing = await client.execute({ sql: `SELECT * FROM assignments WHERE date=? AND room_no=?`, args: [dateStr, roomNo] });
   const now = new Date().toISOString();
   if (existing.rows.length === 0) {
     ({ adults, children, infants } = applyTotalCap(adults || 0, children || 0, infants || 0, cap));
     await client.execute({
-      sql: `INSERT INTO assignments (date, room_no, guest_name, site, amount, plan_label, adults, children, infants, memo, needs_review, review_reason, is_manual, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,?)`,
+      sql: `INSERT INTO assignments (date, room_no, guest_name, site, amount, plan_label, adults, children, infants, memo, meal_counts, needs_review, review_reason, is_manual, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)`,
       args: [
         dateStr, roomNo, fields.guestName || null, fields.site || null, fields.amount || 0, fields.planLabel || null,
-        adults || 0, children || 0, infants || 0, fields.memo || null,
+        adults || 0, children || 0, infants || 0, fields.memo || null, mealCountsJson || '{}',
         fields.needsReview ? 1 : 0, fields.reviewReason || null, now,
       ],
     });
@@ -270,7 +279,7 @@ async function updateCellManual(dateStr, roomNo, fields) {
     const effInfants = infants !== undefined ? infants : cur.infants;
     const capped = applyTotalCap(effAdults || 0, effChildren || 0, effInfants || 0, cap);
     await client.execute({
-      sql: `UPDATE assignments SET guest_name=?, site=?, amount=?, plan_label=?, adults=?, children=?, infants=?, memo=?, needs_review=?, review_reason=?, is_manual=1, updated_at=? WHERE date=? AND room_no=?`,
+      sql: `UPDATE assignments SET guest_name=?, site=?, amount=?, plan_label=?, adults=?, children=?, infants=?, memo=?, meal_counts=?, needs_review=?, review_reason=?, updated_at=? WHERE date=? AND room_no=?`,
       args: [
         fields.guestName !== undefined ? fields.guestName : cur.guest_name,
         fields.site !== undefined ? fields.site : cur.site,
@@ -280,12 +289,78 @@ async function updateCellManual(dateStr, roomNo, fields) {
         capped.children,
         capped.infants,
         fields.memo !== undefined ? fields.memo : cur.memo,
+        mealCountsJson !== undefined ? mealCountsJson : cur.meal_counts,
         fields.needsReview !== undefined ? (fields.needsReview ? 1 : 0) : cur.needs_review,
         fields.reviewReason !== undefined ? fields.reviewReason : cur.review_reason,
         now, dateStr, roomNo,
       ],
     });
   }
+}
+
+// 固定(ロック)の明示的な切り替え。固定すると次回のCSV取込→自動生成で上書きされなくなる。
+// 空室のまま固定した場合は、その部屋を自動割当の対象外にする「空室ロック」として機能する。
+async function setLocked(dateStr, roomNo, locked) {
+  const existing = await client.execute({ sql: `SELECT * FROM assignments WHERE date=? AND room_no=?`, args: [dateStr, roomNo] });
+  const now = new Date().toISOString();
+  if (existing.rows.length === 0) {
+    if (!locked) return; // 何も無い状態を「固定解除」してもやることが無い
+    await client.execute({
+      sql: `INSERT INTO assignments (date, room_no, meal_counts, is_manual, updated_at) VALUES (?,?,?,1,?)`,
+      args: [dateStr, roomNo, '{}', now],
+    });
+    return;
+  }
+  const cur = existing.rows[0];
+  const hasContent = !!(cur.guest_name || cur.reservation_id || cur.memo || (cur.meal_counts && cur.meal_counts !== '{}'));
+  if (!locked && !hasContent) {
+    // 中身の無い「空室ロック」だけの行なら、解除時に削除して完全に自動割当へ開放する
+    await client.execute({ sql: `DELETE FROM assignments WHERE date=? AND room_no=?`, args: [dateStr, roomNo] });
+    return;
+  }
+  await client.execute({
+    sql: `UPDATE assignments SET is_manual=?, updated_at=? WHERE date=? AND room_no=?`,
+    args: [locked ? 1 : 0, now, dateStr, roomNo],
+  });
+}
+
+// 2部屋のタイル入れ替え(ドラッグ&ドロップ)。中身(予約者・食事等)をまるごと入れ替える。
+// 固定状態(is_manual)もその部屋の「中身」として一緒に移動する。
+async function swapRooms(dateStr, roomA, roomB) {
+  const res = await client.execute({
+    sql: `SELECT * FROM assignments WHERE date=? AND room_no IN (?,?)`,
+    args: [dateStr, roomA, roomB],
+  });
+  const rowA = res.rows.find((r) => String(r.room_no) === String(roomA)) || null;
+  const rowB = res.rows.find((r) => String(r.room_no) === String(roomB)) || null;
+  const now = new Date().toISOString();
+  const stmts = [];
+  const place = (roomNo, src) => {
+    if (!src) {
+      stmts.push({ sql: `DELETE FROM assignments WHERE date=? AND room_no=?`, args: [dateStr, roomNo] });
+      return;
+    }
+    stmts.push({
+      sql: `INSERT INTO assignments
+        (date, room_no, reservation_id, guest_name, site, amount, plan_label, plan_name_raw, adults, children, infants, memo, meal_counts, checkin, checkout, nights, needs_review, review_reason, group_key, is_continuing, is_manual, updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(date, room_no) DO UPDATE SET
+          reservation_id=excluded.reservation_id, guest_name=excluded.guest_name, site=excluded.site, amount=excluded.amount,
+          plan_label=excluded.plan_label, plan_name_raw=excluded.plan_name_raw, adults=excluded.adults, children=excluded.children,
+          infants=excluded.infants, memo=excluded.memo, meal_counts=excluded.meal_counts, checkin=excluded.checkin, checkout=excluded.checkout,
+          nights=excluded.nights, needs_review=excluded.needs_review, review_reason=excluded.review_reason, group_key=excluded.group_key,
+          is_continuing=excluded.is_continuing, is_manual=excluded.is_manual, updated_at=excluded.updated_at`,
+      args: [
+        dateStr, roomNo, src.reservation_id, src.guest_name, src.site, src.amount,
+        src.plan_label, src.plan_name_raw, src.adults, src.children, src.infants, src.memo,
+        src.meal_counts || '{}', src.checkin, src.checkout, src.nights,
+        src.needs_review, src.review_reason, src.group_key, src.is_continuing, src.is_manual, now,
+      ],
+    });
+  };
+  place(roomA, rowB);
+  place(roomB, rowA);
+  if (stmts.length) await client.batch(stmts, 'write');
 }
 
 async function clearCell(dateStr, roomNo) {
@@ -311,6 +386,8 @@ module.exports = {
   getAssignmentsForDate,
   saveAssignments,
   updateCellManual,
+  setLocked,
+  swapRooms,
   clearCell,
   listDatesWithReservations,
   listDatesWithAssignments,

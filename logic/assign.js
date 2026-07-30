@@ -3,12 +3,14 @@ const {
   ROOM_401, ROOM_601, ABOVE_MAP,
 } = require('./roomMaster');
 const { classifyRoomType, classifyPlan } = require('./classify');
+const { seedMealCounts } = require('./mealItems');
 
 // 2階部屋番号 → 直下の1階部屋番号（逆引き）。205の直下は納戸のため対応部屋なし。
 const BELOW_MAP = {};
 for (const [f1, f2] of Object.entries(ABOVE_MAP)) BELOW_MAP[f2] = parseInt(f1, 10);
 
 function makeCell({ res, roomNo, needsReview, reviewReason, groupKey, isContinuing }) {
+  const planLabel = classifyPlan(res.planName, res.meal);
   return {
     roomNo,
     guestName: res.guestName,
@@ -16,11 +18,12 @@ function makeCell({ res, roomNo, needsReview, reviewReason, groupKey, isContinui
     reservationNo: res.reservationNo,
     site: res.site,
     amount: res.totalAmount,
-    planLabel: classifyPlan(res.planName, res.meal),
+    planLabel,
     planNameRaw: res.planName,
     adults: res.adults,
     children: res.children,
     infants: res.infants,
+    mealCounts: seedMealCounts(planLabel, (res.adults || 0) + (res.children || 0)),
     memo: res.otherDetails || '',
     checkin: res.checkin,
     checkout: res.checkout,

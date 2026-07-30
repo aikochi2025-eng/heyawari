@@ -8,17 +8,21 @@
 </head>
 <body>
 <header class="topbar">
-  <h1>🏠 自動部屋割り君</h1>
+  <div class="topbar-left">
+    <h1>柏島ヴィレッジ　部屋割り管理</h1>
+    <div class="topbar-hint">タイルをドラッグして入れ替え／タップして詳細編集</div>
+  </div>
   <div class="toolbar">
     <label class="upload-btn">
       CSVアップロード
       <input type="file" id="csvFile" accept=".csv,.CSV" hidden>
     </label>
     <input type="date" id="datePicker">
-    <button id="genBtn" class="primary">この日の部屋割りを生成/更新</button>
-    <button id="forceGenBtn" class="danger" title="手動編集も含めて全て再生成します">強制再生成</button>
-    <button id="exportBtn">Excelダウンロード</button>
-    <button id="multiDayBtn">3日間ビュー（印刷用）</button>
+    <button id="genBtn" class="primary">生成/更新</button>
+    <button id="forceGenBtn" class="danger" title="固定していないセルを全て再生成します">強制再生成</button>
+    <button id="exportBtn">Excel</button>
+    <button id="multiDayBtn">3日間ビュー</button>
+    <span class="total-amount">決済合計 <strong id="totalAmount">¥0</strong></span>
     <span id="saveStatus" class="save-status"></span>
   </div>
 </header>
@@ -29,8 +33,10 @@
 </div>
 
 <main id="app">
-  <p class="hint">CSVをアップロードし、日付を選んで「生成/更新」を押してください。セルは直接クリックして編集でき、変更は自動で保存されます。</p>
+  <p class="hint">CSVをアップロードし、日付を選んでください。タイルをタップすると詳細を編集できます。</p>
 </main>
+
+<section id="mealSummary" class="meal-summary"></section>
 
 <div id="multiDayView" class="multi-day-view" hidden>
   <div class="multi-day-toolbar no-print">
@@ -40,22 +46,81 @@
   <div id="multiDayPages"></div>
 </div>
 
+<!-- 部屋詳細モーダル -->
+<div id="roomModal" class="modal-overlay" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modalRoomTitle"></div>
+        <div class="modal-sub" id="modalRoomSub"></div>
+      </div>
+      <button id="modalClose" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <button id="modalCancelBtn" class="cancel-btn">⚠ キャンセル・空室化</button>
+      <button id="modalLockBtn" class="lock-btn"></button>
+
+      <div class="modal-field">
+        <label>お名前</label>
+        <input id="modalGuestName" placeholder="（空室）">
+      </div>
+      <div class="modal-row">
+        <div class="modal-field">
+          <label>サイト</label>
+          <input id="modalSite" placeholder="サイト">
+        </div>
+        <div class="modal-field">
+          <label>金額</label>
+          <input id="modalAmount" type="number" placeholder="金額">
+        </div>
+      </div>
+      <div class="modal-row pax-fields">
+        <div class="modal-field"><label>大人</label><input id="modalAdults" type="number" min="0"></div>
+        <div class="modal-field"><label>子供</label><input id="modalChildren" type="number" min="0"></div>
+        <div class="modal-field"><label>幼児</label><input id="modalInfants" type="number" min="0"></div>
+      </div>
+
+      <div class="modal-field">
+        <label>📝 メモ（現地追加オーダー等）</label>
+        <textarea id="modalMemo" rows="3" placeholder="例）鰹タタキ×2追加　現金受取済"></textarea>
+      </div>
+
+      <div id="mealCategories"></div>
+    </div>
+  </div>
+</div>
+
 <template id="roomCellTemplate">
   <div class="room-cell">
+    <span class="lock-icon" title="固定中"></span>
+    <span class="review-badge" hidden>要確認</span>
     <div class="room-no"></div>
-    <input class="guest-name" placeholder="（空室）">
-    <input class="site" placeholder="サイト">
-    <input class="amount" placeholder="金額" type="number">
-    <select class="plan-label"><option value="">食事プラン未選択</option></select>
-    <div class="pax-row">
-      <label>大人<input class="pax-adults" type="number" min="0"></label>
-      <label>子供<input class="pax-children" type="number" min="0"></label>
-      <label>幼児<input class="pax-infants" type="number" min="0"></label>
-    </div>
-    <textarea class="memo" placeholder="メモ" rows="2"></textarea>
+    <div class="guest-name"></div>
+    <div class="site-tag"></div>
     <div class="cell-footer">
-      <span class="review-badge" hidden>要確認</span>
-      <button class="clear-btn" title="このセルを空にする">✕</button>
+      <span class="pax-badge"></span>
+      <span class="amount-badge"></span>
+    </div>
+  </div>
+</template>
+
+<template id="mealCategoryTemplate">
+  <div class="meal-category">
+    <div class="meal-category-title">
+      <span class="mc-title"></span>
+      <span class="mc-note"></span>
+    </div>
+    <div class="meal-items"></div>
+  </div>
+</template>
+
+<template id="mealItemRowTemplate">
+  <div class="meal-item-row">
+    <span class="mi-label"></span>
+    <div class="mi-stepper">
+      <button class="mi-minus" type="button">−</button>
+      <span class="mi-count">0</span>
+      <button class="mi-plus" type="button">+</button>
     </div>
   </div>
 </template>

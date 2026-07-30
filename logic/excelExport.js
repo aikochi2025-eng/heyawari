@@ -1,5 +1,6 @@
 const ExcelJS = require('exceljs');
 const { FLOOR1_BLOCK_A, FLOOR1_BLOCK_B, FLOOR2_ROOMS, ROOM_401, ROOM_601, ROOM_RV } = require('./roomMaster');
+const { ALL_MEAL_ITEMS } = require('./mealItems');
 
 const COLOR = {
   header: 'FFDCE6F1',
@@ -27,12 +28,34 @@ function thinBorder() {
   return { top: b, left: b, bottom: b, right: b };
 }
 
+// 食事集計の列を決める。固定カウンター項目(mealItems.js)のうち実際に数量が
+// 入っているものだけを、カテゴリ順で列にする。mealCountsが無い旧データ(移行前)は
+// planLabelを1件分としてフォールバック表示する。
 function buildMealColumns(rooms) {
-  const labels = new Set();
+  const used = new Set();
   Object.values(rooms).forEach((c) => {
-    if (c && c.planLabel) labels.add(c.planLabel);
+    if (!c) return;
+    const counts = c.mealCounts || {};
+    const hasCounts = Object.keys(counts).length > 0 && Object.values(counts).some((v) => v);
+    if (hasCounts) {
+      Object.entries(counts).forEach(([k, v]) => { if (v) used.add(k); });
+    } else if (c.planLabel) {
+      used.add(c.planLabel);
+    }
   });
-  return Array.from(labels).sort();
+  const known = ALL_MEAL_ITEMS.filter((i) => used.has(i));
+  const unknown = Array.from(used).filter((i) => !ALL_MEAL_ITEMS.includes(i)).sort();
+  return [...known, ...unknown];
+}
+
+// 指定した部屋・列(メニュー名)の集計人数を返す(旧データはplanLabelでフォールバック)
+function mealCountFor(cell, menuName) {
+  if (!cell) return 0;
+  const counts = cell.mealCounts || {};
+  const hasCounts = Object.keys(counts).length > 0 && Object.values(counts).some((v) => v);
+  if (hasCounts) return counts[menuName] || 0;
+  if (cell.planLabel === menuName) return (cell.adults || 0) + (cell.children || 0) || 1;
+  return 0;
 }
 
 function roomLabel(roomNo, cell) {
@@ -96,8 +119,8 @@ function buildWorkbook({ dateStr, rooms, issues }) {
     ws.getCell(rowIdx, 5).value = cell && cell.infants ? cell.infants : '';
     mealCols.forEach((m, i) => {
       const col = 6 + i;
-      if (cell && cell.planLabel === m) {
-        const n = cell.adults + cell.children || 1;
+      const n = mealCountFor(cell, m);
+      if (n) {
         ws.getCell(rowIdx, col).value = n;
         mealTotals[m] += n;
       }

@@ -7,6 +7,7 @@ const { parseNeppanCsv, listCheckinDates } = require('./logic/csvParse');
 const { generateForDate } = require('./logic/generate');
 const { buildWorkbook } = require('./logic/excelExport');
 const { PLAN_LABELS } = require('./logic/classify');
+const { MEAL_CATEGORIES } = require('./logic/mealItems');
 
 const app = express();
 app.use(express.json());
@@ -81,6 +82,52 @@ app.get('/api/assignments/:date', async (req, res) => {
   }
 });
 
+// 注意: Express はルートを登録順にマッチするため、":roomNo" のような
+// 汎用パラメータを含むルートは、"swap" や "lock-many" などの固定パスより
+// 後に登録しないと、固定パスへのリクエストが ":roomNo" 側に誤って
+// マッチしてしまう（例: PUT /api/assignments/2026-01-01/swap が
+// roomNo="swap" として処理される）。そのため固定パスのルートを先に置く。
+
+// フロア一括固定/解除
+app.put('/api/assignments/:date/lock-many', async (req, res) => {
+  try {
+    const { roomNos, locked } = req.body || {};
+    if (!Array.isArray(roomNos)) return res.status(400).json({ error: 'roomNosが必要です' });
+    for (const rn of roomNos) {
+      await db.setLocked(req.params.date, parseRoomId(rn), !!locked);
+    }
+    const result = await db.getAssignmentsForDate(req.params.date);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// タイルのドラッグ&ドロップ入れ替え
+app.put('/api/assignments/:date/swap', async (req, res) => {
+  try {
+    const { roomA, roomB } = req.body || {};
+    if (roomA === undefined || roomB === undefined) return res.status(400).json({ error: 'roomA / roomBが必要です' });
+    await db.swapRooms(req.params.date, parseRoomId(roomA), parseRoomId(roomB));
+    const result = await db.getAssignmentsForDate(req.params.date);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 固定(ロック)トグル。CSV再取込・自動生成で上書きされないようにする/戻す。
+app.put('/api/assignments/:date/:roomNo/lock', async (req, res) => {
+  try {
+    const locked = !!(req.body || {}).locked;
+    await db.setLocked(req.params.date, parseRoomId(req.params.roomNo), locked);
+    const result = await db.getAssignmentsForDate(req.params.date);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.put('/api/assignments/:date/:roomNo', async (req, res) => {
   try {
     await db.updateCellManual(req.params.date, parseRoomId(req.params.roomNo), req.body || {});
@@ -135,6 +182,7 @@ app.get('/api/export/:date', async (req, res) => {
 });
 
 app.get('/api/plan-labels', (req, res) => res.json({ labels: PLAN_LABELS }));
+app.get('/api/meal-items', (req, res) => res.json({ categories: MEAL_CATEGORIES }));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, today: today() }));
 

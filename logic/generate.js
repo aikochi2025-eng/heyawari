@@ -1,5 +1,7 @@
 const db = require('../db');
 const { assignRoomsForDate } = require('./assign');
+const { classifyPlan } = require('./classify');
+const { seedMealCounts } = require('./mealItems');
 
 async function generateForDate(dateStr, { force = false } = {}) {
   const active = await db.getActiveReservations(dateStr);
@@ -11,16 +13,18 @@ async function generateForDate(dateStr, { force = false } = {}) {
   for (const r of continuingCandidates) {
     const roomNo = await db.getLastKnownRoom(r.reservationId, dateStr);
     if (roomNo) {
+      const planLabel = classifyPlan(r.planName, r.meal);
       continuingOccupants.push({
         roomNo,
         guestName: r.guestName,
         reservationId: r.reservationId,
         site: r.site,
         amount: r.totalAmount,
-        planLabel: null,
+        planLabel,
         adults: r.adults,
         children: r.children,
         infants: r.infants,
+        mealCounts: seedMealCounts(planLabel, (r.adults || 0) + (r.children || 0)),
         memo: r.otherDetails || '',
         checkin: r.checkin,
         checkout: r.checkout,
