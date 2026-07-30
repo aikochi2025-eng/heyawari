@@ -9,7 +9,22 @@ const { seedMealCounts } = require('./mealItems');
 const BELOW_MAP = {};
 for (const [f1, f2] of Object.entries(ABOVE_MAP)) BELOW_MAP[f2] = parseInt(f1, 10);
 
-function makeCell({ res, roomNo, needsReview, reviewReason, groupKey, isContinuing }) {
+// 1件の予約が複数部屋にまたがる場合、金額・食事・メモを二重集計しないよう
+// 「リーダー部屋」を1つだけ決める。同フロア複数室なら一番小さい部屋番号、
+// 1階・2階にまたがる場合(2人/3人/4人区画の上下split)は1階側の一番小さい部屋番号。
+function pickLeaderRoom(roomList) {
+  const floor1InGroup = roomList.filter((r) => FLOOR1_ROOMS.includes(r));
+  const pool = floor1InGroup.length ? floor1InGroup : roomList;
+  return pool.slice().sort((a, b) => a - b)[0];
+}
+
+// メモの取得元列をサイトによって切り替える(ユーザー指定):
+// 「予約番」サイトはAN列(その他明細)、それ以外のOTA等はK列(商品プラン名称)をメモに使う。
+function memoSourceFor(res) {
+  return res.site === '予約番' ? (res.otherDetails || '') : (res.planName || '');
+}
+
+function makeCell({ res, roomNo, needsReview, reviewReason, groupKey, isContinuing, isLeader = true }) {
   const planLabel = classifyPlan(res.planName, res.meal);
   return {
     roomNo,
@@ -17,14 +32,15 @@ function makeCell({ res, roomNo, needsReview, reviewReason, groupKey, isContinui
     reservationId: res.reservationId,
     reservationNo: res.reservationNo,
     site: res.site,
-    amount: res.totalAmount,
+    amount: isLeader ? res.totalAmount : 0,
     planLabel,
     planNameRaw: res.planName,
     adults: res.adults,
     children: res.children,
     infants: res.infants,
-    mealCounts: seedMealCounts(planLabel, (res.adults || 0) + (res.children || 0)),
-    memo: res.otherDetails || '',
+    mealCounts: isLeader ? seedMealCounts(planLabel, (res.adults || 0) + (res.children || 0)) : {},
+    memo: isLeader ? memoSourceFor(res) : '',
+    isLeader: !!isLeader,
     checkin: res.checkin,
     checkout: res.checkout,
     nights: res.nights,
@@ -188,20 +204,23 @@ function assignRoomsForDate({ newArrivals, continuingOccupants = [] }) {
         }
         run = free;
         const reason = `連続した空き部屋(${n}室)を確保できず、離れた部屋を仮割当: ${run.join('・')}`;
+        const fragLeader = pickLeaderRoom(run);
         for (const rn of run) {
-          rooms[rn] = makeCell({ res, roomNo: rn, needsReview: true, reviewReason: reason, groupKey: res.reservationId });
+          rooms[rn] = makeCell({ res, roomNo: rn, needsReview: true, reviewReason: reason, groupKey: res.reservationId, isLeader: rn === fragLeader });
           occupied.add(rn);
         }
         issues.push({ type: 'FRAGMENTED_ROOMS', message: `${res.guestName}様: ${reason}`, roomNos: run });
         continue;
       }
       const needsReview = preferEdge && run[0] !== floorRooms[floorRooms.length - 1];
+      const leaderRoom = pickLeaderRoom(run);
       for (const rn of run) {
         rooms[rn] = makeCell({
           res, roomNo: rn,
           needsReview,
           reviewReason: needsReview ? '同名の個室予約あり。末端部屋(108/209)を優先する規則ですが確保できませんでした' : null,
           groupKey: res.reservationId,
+          isLeader: rn === leaderRoom,
         });
         occupied.add(rn);
       }
@@ -222,12 +241,14 @@ function assignRoomsForDate({ newArrivals, continuingOccupants = [] }) {
       const bothFloorsScarce =
         FLOOR1_ROOMS.filter((r) => !occupied.has(r)).length <= split.floor1.length + 1 &&
         FLOOR2_ROOMS.filter((r) => !occupied.has(r)).length <= split.floor2.length + 1;
+      const leaderRoom = pickLeaderRoom(allRooms);
       for (const rn of allRooms) {
         rooms[rn] = makeCell({
           res, roomNo: rn,
           needsReview: bothFloorsScarce,
           reviewReason: bothFloorsScarce ? '1階・2階とも残室僅少のため確保内容をご確認ください' : null,
           groupKey: res.reservationId,
+          isLeader: rn === leaderRoom,
         });
         occupied.add(rn);
       }
@@ -261,4 +282,4 @@ function assignRoomsForDate({ newArrivals, continuingOccupants = [] }) {
   return { rooms, issues, unassignedContinuing: continuingOccupants.filter((c) => !c.roomNo) };
 }
 
-module.exports = { assignRoomsForDate };
+module.exports = { assignRoomsForDate, pickLeaderRoom, memoSourceFor };

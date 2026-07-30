@@ -76,6 +76,7 @@ async function init() {
     `ALTER TABLE reservations ADD COLUMN other_details TEXT`,
     `ALTER TABLE assignments ADD COLUMN memo TEXT`,
     `ALTER TABLE assignments ADD COLUMN meal_counts TEXT`,
+    `ALTER TABLE assignments ADD COLUMN is_leader INTEGER DEFAULT 1`,
   ];
   for (const sql of migrations) {
     try { await client.execute(sql); } catch (e) { /* 既に列がある場合は無視 */ }
@@ -161,6 +162,27 @@ async function getLastKnownRoom(reservationId, beforeDate) {
   return res.rows[0].room_no;
 }
 
+// 連泊の引き継ぎ用: 直前の割当の「部屋番号」だけでなく「リーダー部屋かどうか(is_leader)」も
+// 取得する。1件の予約が複数室にまたがる場合、直前の日付に割り当てられていた部屋は1つとは
+// 限らないため、直前の日付を特定してその日付に紐づく全部屋を返す(LIMIT 1で1部屋だけ取ると、
+// 2部屋目以降が連泊2日目以降で消えてしまう不具合があったため)。
+async function getLastKnownAssignments(reservationId, beforeDate) {
+  const dateRes = await client.execute({
+    sql: `SELECT MAX(date) AS d FROM assignments WHERE reservation_id = ? AND date < ?`,
+    args: [reservationId, beforeDate],
+  });
+  const lastDate = dateRes.rows[0] && dateRes.rows[0].d;
+  if (!lastDate) return [];
+  const res = await client.execute({
+    sql: `SELECT room_no, is_leader FROM assignments WHERE reservation_id = ? AND date = ?`,
+    args: [reservationId, lastDate],
+  });
+  return res.rows.map((row) => ({
+    roomNo: row.room_no,
+    isLeader: row.is_leader === null || row.is_leader === undefined ? true : !!row.is_leader,
+  }));
+}
+
 async function getAssignmentsForDate(dateStr) {
   const res = await client.execute({ sql: `SELECT * FROM assignments WHERE date = ? ORDER BY room_no`, args: [dateStr] });
   const rooms = {};
@@ -187,8 +209,23 @@ async function getAssignmentsForDate(dateStr) {
       isContinuing: !!row.is_continuing,
       isManual: !!row.is_manual,
       locked: !!row.is_manual,
+      isLeader: row.is_leader === null || row.is_leader === undefined ? true : !!row.is_leader,
     };
   }
+  // 同一予約(groupKey)で複数室にまたがる場合、非リーダー部屋に「どの部屋に金額・食事が
+  // 集計されているか」を付与する(表示用のヒント。DBには保存せずここで都度計算する)。
+  const groups = {};
+  for (const cell of Object.values(rooms)) {
+    if (!cell.groupKey) continue;
+    (groups[cell.groupKey] = groups[cell.groupKey] || []).push(cell);
+  }
+  for (const cells of Object.values(groups)) {
+    if (cells.length < 2) continue;
+    const leader = cells.find((c) => c.isLeader);
+    if (!leader) continue;
+    cells.forEach((c) => { if (!c.isLeader) c.leaderRoomNo = leader.roomNo; });
+  }
+
   const issuesRes = await client.execute({ sql: `SELECT * FROM issues WHERE date = ? ORDER BY seq`, args: [dateStr] });
   const issues = issuesRes.rows.map((r) => ({ type: r.type, message: r.message, roomNos: JSON.parse(r.room_nos || '[]') }));
   return { rooms, issues };
@@ -204,10 +241,11 @@ async function saveAssignments(dateStr, rooms, issues, { preserveManual = true }
   for (const [roomNoStr, cell] of Object.entries(rooms)) {
     const roomNo = parseInt(roomNoStr, 10);
     if (preserveManual && existingManual.has && existingManual.has(roomNo)) continue;
+    const isLeader = cell.isLeader === false ? 0 : 1;
     stmts.push({
       sql: `INSERT INTO assignments
-        (date, room_no, reservation_id, guest_name, site, amount, plan_label, plan_name_raw, adults, children, infants, memo, meal_counts, checkin, checkout, nights, needs_review, review_reason, group_key, is_continuing, is_manual, updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)
+        (date, room_no, reservation_id, guest_name, site, amount, plan_label, plan_name_raw, adults, children, infants, memo, meal_counts, checkin, checkout, nights, needs_review, review_reason, group_key, is_continuing, is_leader, is_manual, updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)
         ON CONFLICT(date, room_no) DO UPDATE SET
           reservation_id=excluded.reservation_id, guest_name=excluded.guest_name, site=excluded.site,
           amount=excluded.amount, plan_label=excluded.plan_label, plan_name_raw=excluded.plan_name_raw,
@@ -215,7 +253,7 @@ async function saveAssignments(dateStr, rooms, issues, { preserveManual = true }
           meal_counts=excluded.meal_counts,
           checkin=excluded.checkin, checkout=excluded.checkout, nights=excluded.nights,
           needs_review=excluded.needs_review, review_reason=excluded.review_reason,
-          group_key=excluded.group_key, is_continuing=excluded.is_continuing, updated_at=excluded.updated_at`,
+          group_key=excluded.group_key, is_continuing=excluded.is_continuing, is_leader=excluded.is_leader, updated_at=excluded.updated_at`,
       args: [
         dateStr, roomNo, cell.reservationId || null, cell.guestName || null, cell.site || null,
         cell.amount || 0, cell.planLabel || null, cell.planNameRaw || null,
@@ -223,7 +261,7 @@ async function saveAssignments(dateStr, rooms, issues, { preserveManual = true }
         JSON.stringify(cell.mealCounts || {}),
         cell.checkin || null, cell.checkout || null, cell.nights || 0,
         cell.needsReview ? 1 : 0, cell.reviewReason || null, cell.groupKey || null,
-        cell.isContinuing ? 1 : 0, new Date().toISOString(),
+        cell.isContinuing ? 1 : 0, isLeader, new Date().toISOString(),
       ],
     });
   }
@@ -342,19 +380,20 @@ async function swapRooms(dateStr, roomA, roomB) {
     }
     stmts.push({
       sql: `INSERT INTO assignments
-        (date, room_no, reservation_id, guest_name, site, amount, plan_label, plan_name_raw, adults, children, infants, memo, meal_counts, checkin, checkout, nights, needs_review, review_reason, group_key, is_continuing, is_manual, updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        (date, room_no, reservation_id, guest_name, site, amount, plan_label, plan_name_raw, adults, children, infants, memo, meal_counts, checkin, checkout, nights, needs_review, review_reason, group_key, is_continuing, is_leader, is_manual, updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(date, room_no) DO UPDATE SET
           reservation_id=excluded.reservation_id, guest_name=excluded.guest_name, site=excluded.site, amount=excluded.amount,
           plan_label=excluded.plan_label, plan_name_raw=excluded.plan_name_raw, adults=excluded.adults, children=excluded.children,
           infants=excluded.infants, memo=excluded.memo, meal_counts=excluded.meal_counts, checkin=excluded.checkin, checkout=excluded.checkout,
           nights=excluded.nights, needs_review=excluded.needs_review, review_reason=excluded.review_reason, group_key=excluded.group_key,
-          is_continuing=excluded.is_continuing, is_manual=excluded.is_manual, updated_at=excluded.updated_at`,
+          is_continuing=excluded.is_continuing, is_leader=excluded.is_leader, is_manual=excluded.is_manual, updated_at=excluded.updated_at`,
       args: [
         dateStr, roomNo, src.reservation_id, src.guest_name, src.site, src.amount,
         src.plan_label, src.plan_name_raw, src.adults, src.children, src.infants, src.memo,
         src.meal_counts || '{}', src.checkin, src.checkout, src.nights,
-        src.needs_review, src.review_reason, src.group_key, src.is_continuing, src.is_manual, now,
+        src.needs_review, src.review_reason, src.group_key, src.is_continuing,
+        src.is_leader === null || src.is_leader === undefined ? 1 : src.is_leader, src.is_manual, now,
       ],
     });
   };
@@ -383,6 +422,7 @@ module.exports = {
   cancelReservations,
   getActiveReservations,
   getLastKnownRoom,
+  getLastKnownAssignments,
   getAssignmentsForDate,
   saveAssignments,
   updateCellManual,

@@ -118,7 +118,7 @@ function makeTile(roomNo, floorClass) {
       cell.infants ? `幼${cell.infants}` : '',
     ].filter(Boolean).join('/');
     paxEl.textContent = pax;
-    amountEl.textContent = cell.amount ? `¥${cell.amount.toLocaleString()}` : '';
+    amountEl.textContent = cell.amount ? `¥${cell.amount.toLocaleString()}` : (cell.leaderRoomNo ? `→${roomLabel(cell.leaderRoomNo)}号室に集計` : '');
     if (cell.needsReview) {
       wrapper.classList.add('review');
       badge.hidden = false;
@@ -126,6 +126,9 @@ function makeTile(roomNo, floorClass) {
     }
     if (cell.isContinuing) {
       wrapper.title = (wrapper.title ? wrapper.title + '\n' : '') + '連泊中（自動継続）';
+    }
+    if (cell.leaderRoomNo) {
+      wrapper.title = (wrapper.title ? wrapper.title + '\n' : '') + `金額・食事は${roomLabel(cell.leaderRoomNo)}号室にまとめて集計されます`;
     }
     if (cell.locked) {
       wrapper.classList.add('locked');
@@ -340,7 +343,8 @@ function openModal(roomNo) {
   const cap = capacityFor(roomNo);
   const totalPax = (cell.adults || 0) + (cell.children || 0) + (cell.infants || 0);
   modalTitle.textContent = `${roomLabel(roomNo)}号室`;
-  modalSub.textContent = [cell.reservationNo || '予約番未登録', totalPax ? `${totalPax}名` : ''].filter(Boolean).join('　');
+  const leaderNote = cell.leaderRoomNo ? `⚠ 金額・食事は${roomLabel(cell.leaderRoomNo)}号室にまとめて集計されます` : '';
+  modalSub.textContent = [cell.reservationNo || '予約番未登録', totalPax ? `${totalPax}名` : '', leaderNote].filter(Boolean).join('　');
 
   modalGuestName.value = cell.guestName || '';
   modalSite.value = cell.site || '';
