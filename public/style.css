@@ -121,6 +121,8 @@ main { padding: 8px 16px 4px; }
   display: flex; align-items: flex-start; justify-content: center;
   padding: 24px 12px; overflow-y: auto; z-index: 50;
 }
+/* hidden属性がある間は必ず非表示にする（上のdisplay:flexに上書きされないよう明示） */
+.modal-overlay[hidden] { display: none; }
 .modal {
   background: white; border-radius: 10px; width: 100%; max-width: 460px;
   overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
