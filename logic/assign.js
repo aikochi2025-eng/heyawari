@@ -3,7 +3,7 @@ const {
   ROOM_401, ROOM_601, ABOVE_MAP,
 } = require('./roomMaster');
 const { classifyRoomType, classifyPlan } = require('./classify');
-const { seedMealCounts } = require('./mealItems');
+const { seedMealCountsSmart } = require('./mealItems');
 
 // 2階部屋番号 → 直下の1階部屋番号（逆引き）。205の直下は納戸のため対応部屋なし。
 const BELOW_MAP = {};
@@ -38,7 +38,7 @@ function makeCell({ res, roomNo, needsReview, reviewReason, groupKey, isContinui
     adults: res.adults,
     children: res.children,
     infants: res.infants,
-    mealCounts: isLeader ? seedMealCounts(planLabel, (res.adults || 0) + (res.children || 0)) : {},
+    mealCounts: isLeader ? seedMealCountsSmart({ otherDetails: res.otherDetails, planLabel, adults: res.adults, children: res.children }) : {},
     memo: isLeader ? memoSourceFor(res) : '',
     isLeader: !!isLeader,
     checkin: res.checkin,

@@ -1,7 +1,7 @@
 const db = require('../db');
 const { assignRoomsForDate, memoSourceFor } = require('./assign');
 const { classifyPlan } = require('./classify');
-const { seedMealCounts } = require('./mealItems');
+const { seedMealCountsSmart } = require('./mealItems');
 
 async function generateForDate(dateStr, { force = false } = {}) {
   const active = await db.getActiveReservations(dateStr);
@@ -30,7 +30,7 @@ async function generateForDate(dateStr, { force = false } = {}) {
           adults: r.adults,
           children: r.children,
           infants: r.infants,
-          mealCounts: isLeader ? seedMealCounts(planLabel, (r.adults || 0) + (r.children || 0)) : {},
+          mealCounts: isLeader ? seedMealCountsSmart({ otherDetails: r.otherDetails, planLabel, adults: r.adults, children: r.children }) : {},
           memo: isLeader ? memoSourceFor(r) : '',
           isLeader,
           groupKey: r.reservationId,
