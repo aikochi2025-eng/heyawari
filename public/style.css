@@ -33,6 +33,14 @@ button, .upload-btn {
 button.primary { background: #ffcc66; color: #333; font-weight: bold; }
 button.danger { background: #e57373; color: white; }
 input[type="date"] { padding: 6px; border-radius: 6px; border: none; }
+.date-nav { display: flex; align-items: center; gap: 4px; }
+.date-nav-btn {
+  padding: 6px 9px;
+  font-weight: bold;
+  background: #fff;
+  color: #1f4e78;
+}
+.date-nav-btn:hover { background: #eef2f6; }
 .save-status { font-size: 12px; opacity: 0.9; min-width: 80px; }
 .total-amount { font-size: 13px; background: rgba(255,255,255,0.12); padding: 5px 10px; border-radius: 6px; }
 .total-amount strong { color: #ffe08a; }
@@ -207,38 +215,65 @@ main { padding: 8px 16px 4px; }
 }
 .multi-day-toolbar button { background: #fff; color: #1f4e78; }
 
+/* 1枚のA4ページに3日分（day-block x3）をまとめて表示する */
 .day-page {
   width: 190mm;
   min-height: 270mm;
   margin: 10mm auto;
-  padding: 10mm;
+  padding: 8mm;
   background: white;
   box-shadow: 0 0 6px rgba(0,0,0,0.15);
   page-break-after: always;
+  display: flex;
+  flex-direction: column;
 }
-.day-page h2 { font-size: 15px; border-left: 5px solid #1f4e78; padding-left: 8px; margin: 0 0 10px; }
-.ro-section { margin-bottom: 10px; }
-.ro-title { font-weight: bold; font-size: 12px; margin-bottom: 4px; }
+.day-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px dashed #bbb;
+}
+.day-block:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.day-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-left: 5px solid #1f4e78;
+  padding-left: 8px;
+  margin: 0 0 5px;
+  gap: 10px;
+}
+.day-block-header h3 { font-size: 12px; margin: 0; white-space: nowrap; }
+.day-block-totals { display: flex; gap: 10px; align-items: baseline; white-space: nowrap; }
+.day-revenue { font-size: 11.5px; font-weight: bold; color: #1f4e78; }
+.three-day-total {
+  font-size: 11.5px; font-weight: bold; color: #a0680a;
+  background: #fbf5e6; padding: 1px 7px; border-radius: 5px;
+}
+.ro-section { margin-bottom: 5px; }
+.ro-title { font-weight: bold; font-size: 10px; margin-bottom: 2px; }
 .ro-grid {
   display: grid;
   grid-template-columns: repeat(9, 1fr);
-  gap: 3px;
+  gap: 2px;
 }
 .ro-grid-rest { grid-template-columns: repeat(3, minmax(0,1fr)); max-width: 60%; }
 .ro-cell {
   border: 1px solid #ccc;
-  border-radius: 4px;
-  padding: 4px;
-  font-size: 9px;
-  min-height: 50px;
+  border-radius: 3px;
+  padding: 3px;
+  font-size: 8px;
+  min-height: 34px;
 }
 .ro-cell.empty { background: #f2f2f2; color: #999; }
 .ro-cell.review { background: #fff2cc; border-color: #ffc000; }
 .ro-cell.closet { background: #e0e0e0; text-align: center; color: #999; }
-.ro-no { font-weight: bold; font-size: 10px; }
+.ro-no { font-weight: bold; font-size: 9px; }
 .ro-name { font-weight: 600; }
 .ro-site, .ro-pax { color: #555; }
-.ro-issues { font-size: 10px; color: #a00; margin-top: 6px; }
+.ro-issues { font-size: 9px; color: #a00; margin-top: 4px; }
 
 @media print {
   .no-print, .topbar, .multi-day-toolbar { display: none !important; }

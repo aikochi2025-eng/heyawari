@@ -548,6 +548,20 @@ datePicker.addEventListener('change', () => {
   currentDate = datePicker.value;
   loadAssignments(currentDate).catch(() => render({ rooms: {}, issues: [] }));
 });
+
+// 日付の前後移動ボタン（カレンダーの矢印と並んで使う）
+function shiftDate(days) {
+  const cur = datePicker.value ? new Date(`${datePicker.value}T00:00:00`) : new Date();
+  cur.setDate(cur.getDate() + days);
+  const y = cur.getFullYear();
+  const m = String(cur.getMonth() + 1).padStart(2, '0');
+  const d = String(cur.getDate()).padStart(2, '0');
+  datePicker.value = `${y}-${m}-${d}`;
+  currentDate = datePicker.value;
+  loadAssignments(currentDate).catch(() => render({ rooms: {}, issues: [] }));
+}
+el('#datePrevBtn').addEventListener('click', () => shiftDate(-1));
+el('#dateNextBtn').addEventListener('click', () => shiftDate(1));
 el('#csvFile').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -599,12 +613,28 @@ function makeReadonlyCell(roomNo, rooms) {
   return div;
 }
 
-function renderDayPage(dayData) {
-  const page = document.createElement('div');
-  page.className = 'day-page';
+// その日の売上合計(リーダー部屋の金額のみ合算されるため二重計上されない)
+function dayRevenue(rooms) {
+  return Object.values(rooms || {}).reduce((sum, c) => sum + ((c && c.amount) || 0), 0);
+}
+
+function renderDayBlock(dayData, { isFirst = false, threeDayTotal = 0 } = {}) {
+  const block = document.createElement('div');
+  block.className = 'day-block';
   const wdays = ['日', '月', '火', '水', '木', '金', '土'];
   const wd = wdays[new Date(`${dayData.date}T00:00:00`).getDay()];
-  page.innerHTML = `<h2>柏島ヴィレッジ　${dayData.date.replace(/-/g, '/')}（${wd}）チェックイン 部屋割り表</h2>`;
+  const revenue = dayRevenue(dayData.rooms);
+
+  const header = document.createElement('div');
+  header.className = 'day-block-header';
+  header.innerHTML = `
+    <h3>柏島ヴィレッジ　${dayData.date.replace(/-/g, '/')}（${wd}）チェックイン 部屋割り表</h3>
+    <div class="day-block-totals">
+      <span class="day-revenue">売上 ¥${revenue.toLocaleString()}</span>
+      ${isFirst ? `<span class="three-day-total">3日間合計 ¥${threeDayTotal.toLocaleString()}</span>` : ''}
+    </div>
+  `;
+  block.appendChild(header);
 
   const rooms = dayData.rooms || {};
 
@@ -615,7 +645,7 @@ function renderDayPage(dayData) {
   grid2F.className = 'ro-grid';
   FLOOR2_ROOMS.forEach((r) => grid2F.appendChild(makeReadonlyCell(r, rooms)));
   sec2F.appendChild(grid2F);
-  page.appendChild(sec2F);
+  block.appendChild(sec2F);
 
   const sec1F = document.createElement('div');
   sec1F.className = 'ro-section';
@@ -624,7 +654,7 @@ function renderDayPage(dayData) {
   grid1F.className = 'ro-grid';
   FLOOR1_ROOMS.forEach((r) => grid1F.appendChild(makeReadonlyCell(r, rooms)));
   sec1F.appendChild(grid1F);
-  page.appendChild(sec1F);
+  block.appendChild(sec1F);
 
   const secRest = document.createElement('div');
   secRest.className = 'ro-section';
@@ -633,15 +663,26 @@ function renderDayPage(dayData) {
   gridRest.className = 'ro-grid ro-grid-rest';
   [401, 601, ROOM_RV].forEach((r) => gridRest.appendChild(makeReadonlyCell(r, rooms)));
   secRest.appendChild(gridRest);
-  page.appendChild(secRest);
+  block.appendChild(secRest);
 
   if (dayData.issues && dayData.issues.length) {
     const issuesDiv = document.createElement('div');
     issuesDiv.className = 'ro-issues';
     issuesDiv.innerHTML = '<strong>要確認:</strong> ' + dayData.issues.map((i) => i.message).join(' / ');
-    page.appendChild(issuesDiv);
+    block.appendChild(issuesDiv);
   }
 
+  return block;
+}
+
+// 3日分を1枚のA4縦ページにまとめて表示する
+function renderThreeDayPage(daysData) {
+  const page = document.createElement('div');
+  page.className = 'day-page';
+  const threeDayTotal = daysData.reduce((sum, d) => sum + dayRevenue(d.rooms), 0);
+  daysData.forEach((d, i) => {
+    page.appendChild(renderDayBlock(d, { isFirst: i === 0, threeDayTotal }));
+  });
   return page;
 }
 
@@ -651,7 +692,7 @@ async function showMultiDayView() {
   try {
     const data = await api(`/api/assignments-range?start=${start}&days=3`);
     multiDayPages.innerHTML = '';
-    data.days.forEach((d) => multiDayPages.appendChild(renderDayPage(d)));
+    multiDayPages.appendChild(renderThreeDayPage(data.days));
     document.querySelector('.topbar').hidden = true;
     document.querySelector('#issuesBox').hidden = true;
     app.hidden = true;

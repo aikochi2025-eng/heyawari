@@ -17,7 +17,11 @@
       CSVアップロード
       <input type="file" id="csvFile" accept=".csv,.CSV" hidden>
     </label>
-    <input type="date" id="datePicker">
+    <div class="date-nav">
+      <button id="datePrevBtn" class="date-nav-btn" title="前日" type="button">＜</button>
+      <input type="date" id="datePicker">
+      <button id="dateNextBtn" class="date-nav-btn" title="翌日" type="button">＞</button>
+    </div>
     <button id="genBtn" class="primary">生成/更新</button>
     <button id="forceGenBtn" class="danger" title="固定していないセルを全て再生成します">強制再生成</button>
     <button id="exportBtn">Excel</button>
