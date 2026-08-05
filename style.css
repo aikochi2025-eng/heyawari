@@ -33,6 +33,14 @@ button, .upload-btn {
 button.primary { background: #ffcc66; color: #333; font-weight: bold; }
 button.danger { background: #e57373; color: white; }
 input[type="date"] { padding: 6px; border-radius: 6px; border: none; }
+.date-nav { display: flex; align-items: center; gap: 4px; }
+.date-nav-btn {
+  padding: 6px 9px;
+  font-weight: bold;
+  background: #fff;
+  color: #1f4e78;
+}
+.date-nav-btn:hover { background: #eef2f6; }
 .save-status { font-size: 12px; opacity: 0.9; min-width: 80px; }
 .total-amount { font-size: 13px; background: rgba(255,255,255,0.12); padding: 5px 10px; border-radius: 6px; }
 .total-amount strong { color: #ffe08a; }

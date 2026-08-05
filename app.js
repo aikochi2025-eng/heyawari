@@ -548,6 +548,20 @@ datePicker.addEventListener('change', () => {
   currentDate = datePicker.value;
   loadAssignments(currentDate).catch(() => render({ rooms: {}, issues: [] }));
 });
+
+// 日付の前後移動ボタン（カレンダーの矢印と並んで使う）
+function shiftDate(days) {
+  const cur = datePicker.value ? new Date(`${datePicker.value}T00:00:00`) : new Date();
+  cur.setDate(cur.getDate() + days);
+  const y = cur.getFullYear();
+  const m = String(cur.getMonth() + 1).padStart(2, '0');
+  const d = String(cur.getDate()).padStart(2, '0');
+  datePicker.value = `${y}-${m}-${d}`;
+  currentDate = datePicker.value;
+  loadAssignments(currentDate).catch(() => render({ rooms: {}, issues: [] }));
+}
+el('#datePrevBtn').addEventListener('click', () => shiftDate(-1));
+el('#dateNextBtn').addEventListener('click', () => shiftDate(1));
 el('#csvFile').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
