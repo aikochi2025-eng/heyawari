@@ -236,9 +236,16 @@ function render(data) {
   renderMealSummary();
 }
 
+// 宿泊者名から苗字（名前の先頭の単語）だけを取り出す。表の見出しを短くして見やすくするため。
+function surnameOf(name) {
+  if (!name) return '';
+  const parts = name.trim().split(/[\s　]+/);
+  return parts[0] || '';
+}
+
 // ---- 部屋番号・宿泊者名・食事の集計表を組み立てる（ライブ表示／3日間印刷の両方で共用） ----
-// rooms: { roomNo: cell } / tableClass: 表の見た目調整用クラス名
-function buildMealTable(rooms, { tableClass = 'meal-summary-table' } = {}) {
+// rooms: { roomNo: cell } / tableClass: 表の見た目調整用クラス名 / showFooter: 一番下の合計行を出すか
+function buildMealTable(rooms, { tableClass = 'meal-summary-table', showFooter = true } = {}) {
   if (!mealCategories.length) return null;
   const allRoomOrder = [...FLOOR1_REAL_ROOMS, ...FLOOR2_ROOMS, ROOM_RV, ...LOCKUPS];
   const occupiedRooms = allRoomOrder.filter((r) => rooms[r]);
@@ -273,7 +280,7 @@ function buildMealTable(rooms, { tableClass = 'meal-summary-table' } = {}) {
   const headRow2 = document.createElement('tr');
   headRow2.className = 'mst-name-row';
   headRow2.innerHTML = '<th class="mst-corner"></th>' +
-    occupiedRooms.map((r) => `<th>${(rooms[r].guestName || '').slice(0, 6)}</th>`).join('') +
+    occupiedRooms.map((r) => `<th>${surnameOf(rooms[r].guestName)}</th>`).join('') +
     '<th class="mst-total-col"></th><th class="mst-total-col"></th>';
   thead.appendChild(headRow1);
   thead.appendChild(headRow2);
@@ -294,14 +301,16 @@ function buildMealTable(rooms, { tableClass = 'meal-summary-table' } = {}) {
   });
   table.appendChild(tbody);
 
-  const tfoot = document.createElement('tfoot');
-  const footRow = document.createElement('tr');
-  const grandTotal = Object.values(colTotals).reduce((a, b) => a + b, 0);
-  footRow.innerHTML = '<td class="mst-item">合計</td>' +
-    occupiedRooms.map((r) => `<td>${colTotals[r] || ''}</td>`).join('') +
-    `<td class="mst-total-col">合計</td><td class="mst-total-col mst-total">${grandTotal}</td>`;
-  tfoot.appendChild(footRow);
-  table.appendChild(tfoot);
+  if (showFooter) {
+    const tfoot = document.createElement('tfoot');
+    const footRow = document.createElement('tr');
+    const grandTotal = Object.values(colTotals).reduce((a, b) => a + b, 0);
+    footRow.innerHTML = '<td class="mst-item">合計</td>' +
+      occupiedRooms.map((r) => `<td>${colTotals[r] || ''}</td>`).join('') +
+      `<td class="mst-total-col">合計</td><td class="mst-total-col mst-total">${grandTotal}</td>`;
+    tfoot.appendChild(footRow);
+    table.appendChild(tfoot);
+  }
 
   return table;
 }
@@ -469,7 +478,7 @@ async function saveCell(roomNo, fields, { keepModalOpen = false } = {}) {
   }
 }
 
-// モーダルを開いたまま裏のタイル一覧・集計表だけ再描画する
+// モーダルを開いたまま裏のタィル一覧・集計表だけ再描画する
 function renderTilesOnly() {
   const scrollY = app.scrollTop;
   app.innerHTML = '';
@@ -583,7 +592,7 @@ el('#csvFile').addEventListener('change', async (e) => {
     setSaveStatus(`取込完了(${data.count}件)`);
     let msg = `予約${data.count}件を読み込みました。\n対象日: ${data.dates.slice(0, 5).join(', ')}${data.dates.length > 5 ? ' 他' : ''}`;
     if (data.cancelledCount) {
-      msg += `\n\nキャンセル検出: ${data.cancelledCount}件`;
+      msg += `\n\nキャンセル検出: ${data.cancelledCount}'[�`;
       if (data.vacated && data.vacated.length) {
         msg += `\n以下を空室化しました:\n` + data.vacated.map((v) => `  ${v.date} ${v.roomNo}号室 (${v.guestName || ''})`).join('\n');
       }
@@ -736,7 +745,7 @@ function renderMealDayBlock(dayData) {
   header.innerHTML = `<h3>柏島ヴィレッジ　${dayData.date.replace(/-/g, '/')}（${wd}）食事管理表</h3>`;
   block.appendChild(header);
 
-  const table = buildMealTable(dayData.rooms || {}, { tableClass: 'meal-summary-table meal-print-table' });
+  const table = buildMealTable(dayData.rooms || {}, { tableClass: 'meal-summary-table meal-print-table', showFooter: false });
   if (table) {
     block.appendChild(table);
   } else {
@@ -748,7 +757,7 @@ function renderMealDayBlock(dayData) {
   return block;
 }
 
-// 3日分の食事管理表を1枚のA4縦ページにまとめる
+// 3日分の食事管理表を1枚のA4縦ページにまとる
 function renderMealThreeDayPage(daysData) {
   const page = document.createElement('div');
   page.className = 'day-page meal-day-page';
