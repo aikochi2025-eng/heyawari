@@ -284,14 +284,20 @@ main { padding: 8px 16px 4px; }
 .meal-day-block:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
 .meal-print-table {
   width: 100%;
-  font-size: 8.5px;
+  font-size: 8px;
   table-layout: fixed;
 }
 .meal-print-table th, .meal-print-table td {
-  padding: 2px 3px;
+  padding: 2px 1px;
   position: static; /* 印刷ページ内ではstickyは不要・位置崩れ防止のため無効化 */
+  overflow: hidden;
 }
 .meal-print-table .mst-item { text-align: left; }
+/* メニュー名の列(左端・右端2列)は文字が入るぶん幅広く、部屋番号の列は狭くして
+   部屋数が多くても「満足コース」等の文字がはみ出さないようにする */
+.meal-print-table th:first-child, .meal-print-table td:first-child { width: 8%; font-size: 7px; }
+.meal-print-table th:nth-last-child(2), .meal-print-table td:nth-last-child(2) { width: 7%; font-size: 7px; }
+.meal-print-table th:last-child, .meal-print-table td:last-child { width: 4%; }
 
 @media print {
   .no-print, .topbar, .multi-day-toolbar { display: none !important; }
