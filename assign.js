@@ -136,7 +136,7 @@ function findVerticalSplitFromFloor2(occupiedSet, n2 = 2, n1 = 1) {
   return null;
 }
 
-function assignRoomsForDate({ newArrivals, continuingOccupants = [] }) {
+function assignRoomsForDate({ newArrivals, continuingOccupants = [], lockedRoomNos = [] }) {
   const rooms = {}; // roomNo -> cell
   const issues = [];
   const occupied = new Set();
@@ -144,6 +144,12 @@ function assignRoomsForDate({ newArrivals, continuingOccupants = [] }) {
   for (const c of continuingOccupants) {
     rooms[c.roomNo] = { ...c, isContinuing: true };
     occupied.add(c.roomNo);
+  }
+
+  // 固定(ロック)済みの部屋は「空室ではない」ものとして扱い、新規/連泊予約の割当候補から除外する
+  // （実データはDB側でそのまま保持されるため、ここでは占有マークのみでよい）
+  for (const roomNo of lockedRoomNos) {
+    occupied.add(roomNo);
   }
 
   // カテゴリ分類

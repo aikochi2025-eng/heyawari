@@ -183,6 +183,18 @@ async function getLastKnownAssignments(reservationId, beforeDate) {
   }));
 }
 
+// 指定日で固定(ロック=is_manual)されている部屋の一覧を返す(roomNo, reservationId)。
+// CSV再取込後の自動再生成で、これらの部屋を「空室ではない」ものとして自動割当アルゴリズムに
+// 認識させ、対応する予約を新規/連泊の割当候補から除外するために使う
+// (固定した部屋が、他の新規予約に取られたり、同じ予約が別の部屋に重複生成されたりするのを防ぐ)。
+async function getLockedRoomsForDate(dateStr) {
+  const res = await client.execute({
+    sql: `SELECT room_no, reservation_id FROM assignments WHERE date = ? AND is_manual = 1`,
+    args: [dateStr],
+  });
+  return res.rows.map((r) => ({ roomNo: r.room_no, reservationId: r.reservation_id }));
+}
+
 async function getAssignmentsForDate(dateStr) {
   const res = await client.execute({ sql: `SELECT * FROM assignments WHERE date = ? ORDER BY room_no`, args: [dateStr] });
   const rooms = {};
@@ -437,6 +449,7 @@ module.exports = {
   getLastKnownRoom,
   getLastKnownAssignments,
   getAssignmentsForDate,
+  getLockedRoomsForDate,
   saveAssignments,
   updateCellManual,
   setLocked,
