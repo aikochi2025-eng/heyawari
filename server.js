@@ -5,7 +5,6 @@ const path = require('path');
 const db = require('./db');
 const { parseNeppanCsv, listCheckinDates } = require('./logic/csvParse');
 const { generateForDate } = require('./logic/generate');
-const { buildWorkbook } = require('./logic/excelExport');
 const { PLAN_LABELS } = require('./logic/classify');
 const { MEAL_CATEGORIES } = require('./logic/mealItems');
 
@@ -160,21 +159,6 @@ app.get('/api/assignments-range', async (req, res) => {
       results.push({ date: dateStr, ...data });
     }
     res.json({ days: results });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.get('/api/export/:date', async (req, res) => {
-  try {
-    const dateStr = req.params.date;
-    const { rooms, issues } = await db.getAssignmentsForDate(dateStr);
-    const wb = buildWorkbook({ dateStr, rooms, issues });
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="heyawari_${dateStr}.xlsx"`);
-    await wb.xlsx.write(res);
-    res.end();
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message });

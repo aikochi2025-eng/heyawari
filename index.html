@@ -24,8 +24,8 @@
     </div>
     <button id="genBtn" class="primary">生成/更新</button>
     <button id="forceGenBtn" class="danger" title="固定していないセルを全て再生成します">強制再生成</button>
-    <button id="exportBtn">Excel</button>
     <button id="multiDayBtn">3日間ビュー</button>
+    <button id="mealMultiDayBtn">3日間食事表</button>
     <span class="total-amount">決済合計 <strong id="totalAmount">¥0</strong></span>
     <span id="saveStatus" class="save-status"></span>
   </div>
@@ -48,6 +48,14 @@
     <button id="printBtn">印刷する</button>
   </div>
   <div id="multiDayPages"></div>
+</div>
+
+<div id="mealMultiDayView" class="multi-day-view" hidden>
+  <div class="multi-day-toolbar no-print">
+    <button id="mealBackToEditBtn">← 編集画面に戻る</button>
+    <button id="mealPrintBtn">印刷する</button>
+  </div>
+  <div id="mealMultiDayPages"></div>
 </div>
 
 <!-- 部屋詳細モーダル -->

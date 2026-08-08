@@ -236,18 +236,15 @@ function render(data) {
   renderMealSummary();
 }
 
-// ---- 画面下部：食事・オプション集計表（ライブ） ----
-function renderMealSummary() {
-  mealSummaryEl.innerHTML = '';
-  if (!mealCategories.length) return;
+// ---- 部屋番号・宿泊者名・食事の集計表を組み立てる（ライブ表示／3日間印刷の両方で共用） ----
+// rooms: { roomNo: cell } / tableClass: 表の見た目調整用クラス名
+function buildMealTable(rooms, { tableClass = 'meal-summary-table' } = {}) {
+  if (!mealCategories.length) return null;
   const allRoomOrder = [...FLOOR1_REAL_ROOMS, ...FLOOR2_ROOMS, ROOM_RV, ...LOCKUPS];
-  const occupiedRooms = allRoomOrder.filter((r) => currentRooms[r]);
-  if (occupiedRooms.length === 0) {
-    mealSummaryEl.innerHTML = '<p class="hint">食事集計（自動更新）：本日の割当がまだありません。</p>';
-    return;
-  }
+  const occupiedRooms = allRoomOrder.filter((r) => rooms[r]);
+  if (occupiedRooms.length === 0) return null;
+
   const allItems = mealCategories.flatMap((c) => c.items);
-  const rowTotals = {};
   const colTotals = {};
   occupiedRooms.forEach((r) => (colTotals[r] = 0));
   const itemRows = [];
@@ -255,26 +252,18 @@ function renderMealSummary() {
     let rowTotal = 0;
     const perRoom = {};
     occupiedRooms.forEach((r) => {
-      const n = (currentRooms[r].mealCounts && currentRooms[r].mealCounts[item]) || 0;
+      const n = (rooms[r].mealCounts && rooms[r].mealCounts[item]) || 0;
       perRoom[r] = n;
       rowTotal += n;
       colTotals[r] += n;
     });
     if (rowTotal > 0) {
-      rowTotals[item] = rowTotal;
       itemRows.push({ item, perRoom, rowTotal });
     }
   });
 
-  const title = document.createElement('div');
-  title.className = 'meal-summary-title';
-  title.textContent = '食事集計（自動更新）';
-  mealSummaryEl.appendChild(title);
-
-  const scrollWrap = document.createElement('div');
-  scrollWrap.className = 'meal-summary-scroll';
   const table = document.createElement('table');
-  table.className = 'meal-summary-table';
+  table.className = tableClass;
 
   const thead = document.createElement('thead');
   const headRow1 = document.createElement('tr');
@@ -284,7 +273,7 @@ function renderMealSummary() {
   const headRow2 = document.createElement('tr');
   headRow2.className = 'mst-name-row';
   headRow2.innerHTML = '<th class="mst-corner"></th>' +
-    occupiedRooms.map((r) => `<th>${(currentRooms[r].guestName || '').slice(0, 6)}</th>`).join('') +
+    occupiedRooms.map((r) => `<th>${(rooms[r].guestName || '').slice(0, 6)}</th>`).join('') +
     '<th class="mst-total-col"></th><th class="mst-total-col"></th>';
   thead.appendChild(headRow1);
   thead.appendChild(headRow2);
@@ -314,6 +303,29 @@ function renderMealSummary() {
   tfoot.appendChild(footRow);
   table.appendChild(tfoot);
 
+  return table;
+}
+
+// ---- 画面下部：食事・オプション集計表（ライブ） ----
+function renderMealSummary() {
+  mealSummaryEl.innerHTML = '';
+  if (!mealCategories.length) return;
+
+  const title = document.createElement('div');
+  title.className = 'meal-summary-title';
+  title.textContent = '食事集計（自動更新）';
+  mealSummaryEl.appendChild(title);
+
+  const table = buildMealTable(currentRooms);
+  if (!table) {
+    const hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.textContent = '本日の割当がまだありません。';
+    mealSummaryEl.appendChild(hint);
+    return;
+  }
+  const scrollWrap = document.createElement('div');
+  scrollWrap.className = 'meal-summary-scroll';
   scrollWrap.appendChild(table);
   mealSummaryEl.appendChild(scrollWrap);
 }
@@ -540,10 +552,6 @@ el('#forceGenBtn').addEventListener('click', () => {
   currentDate = datePicker.value;
   generate(currentDate, true);
 });
-el('#exportBtn').addEventListener('click', () => {
-  const date = datePicker.value;
-  window.open(`/api/export/${date}`, '_blank');
-});
 datePicker.addEventListener('change', () => {
   currentDate = datePicker.value;
   loadAssignments(currentDate).catch(() => render({ rooms: {}, issues: [] }));
@@ -712,6 +720,68 @@ el('#backToEditBtn').addEventListener('click', () => {
   mealSummaryEl.hidden = false;
 });
 el('#printBtn').addEventListener('click', () => window.print());
+
+// ---- 3日間食事管理表（印刷用・A4縦・部屋番号/宿泊者名/食事を3日分まとめて表示） ----
+const mealMultiDayView = el('#mealMultiDayView');
+const mealMultiDayPages = el('#mealMultiDayPages');
+
+function renderMealDayBlock(dayData) {
+  const block = document.createElement('div');
+  block.className = 'day-block meal-day-block';
+  const wdays = ['日', '月', '火', '水', '木', '金', '土'];
+  const wd = wdays[new Date(`${dayData.date}T00:00:00`).getDay()];
+
+  const header = document.createElement('div');
+  header.className = 'day-block-header';
+  header.innerHTML = `<h3>柏島ヴィレッジ　${dayData.date.replace(/-/g, '/')}（${wd}）食事管理表</h3>`;
+  block.appendChild(header);
+
+  const table = buildMealTable(dayData.rooms || {}, { tableClass: 'meal-summary-table meal-print-table' });
+  if (table) {
+    block.appendChild(table);
+  } else {
+    const empty = document.createElement('p');
+    empty.className = 'ro-issues';
+    empty.textContent = 'この日の割当はまだありません。';
+    block.appendChild(empty);
+  }
+  return block;
+}
+
+// 3日分の食事管理表を1枚のA4縦ページにまとめる
+function renderMealThreeDayPage(daysData) {
+  const page = document.createElement('div');
+  page.className = 'day-page meal-day-page';
+  daysData.forEach((d) => page.appendChild(renderMealDayBlock(d)));
+  return page;
+}
+
+async function showMealMultiDayView() {
+  const start = datePicker.value;
+  setSaveStatus('読み込み中...');
+  try {
+    const data = await api(`/api/assignments-range?start=${start}&days=3`);
+    mealMultiDayPages.innerHTML = '';
+    mealMultiDayPages.appendChild(renderMealThreeDayPage(data.days));
+    document.querySelector('.topbar').hidden = true;
+    document.querySelector('#issuesBox').hidden = true;
+    app.hidden = true;
+    mealSummaryEl.hidden = true;
+    mealMultiDayView.hidden = false;
+    setSaveStatus('');
+  } catch (e) {
+    setSaveStatus('エラー: ' + e.message, false);
+  }
+}
+
+el('#mealMultiDayBtn').addEventListener('click', showMealMultiDayView);
+el('#mealBackToEditBtn').addEventListener('click', () => {
+  mealMultiDayView.hidden = true;
+  document.querySelector('.topbar').hidden = false;
+  app.hidden = false;
+  mealSummaryEl.hidden = false;
+});
+el('#mealPrintBtn').addEventListener('click', () => window.print());
 
 // 初期表示（食事カテゴリ一覧を先に取得してからグリッドを描画する）
 currentDate = datePicker.value;

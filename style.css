@@ -275,6 +275,24 @@ main { padding: 8px 16px 4px; }
 .ro-site, .ro-pax { color: #555; }
 .ro-issues { font-size: 9px; color: #a00; margin-top: 4px; }
 
+/* ---- 3日間食事管理表（印刷用・A4縦） ---- */
+.meal-day-block {
+  border-bottom: 1px dashed #bbb;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+.meal-day-block:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.meal-print-table {
+  width: 100%;
+  font-size: 8.5px;
+  table-layout: fixed;
+}
+.meal-print-table th, .meal-print-table td {
+  padding: 2px 3px;
+  position: static; /* 印刷ページ内ではstickyは不要・位置崩れ防止のため無効化 */
+}
+.meal-print-table .mst-item { text-align: left; }
+
 @media print {
   .no-print, .topbar, .multi-day-toolbar { display: none !important; }
   body { background: white; }
