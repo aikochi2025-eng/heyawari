@@ -344,6 +344,7 @@ const modalOverlay = el('#roomModal');
 const modalTitle = el('#modalRoomTitle');
 const modalSub = el('#modalRoomSub');
 const modalGuestName = el('#modalGuestName');
+const modalNights = el('#modalNights');
 const modalSite = el('#modalSite');
 const modalAmount = el('#modalAmount');
 const modalAdults = el('#modalAdults');
@@ -368,6 +369,7 @@ function openModal(roomNo) {
   modalSub.textContent = [cell.reservationNo || '予約番未登録', totalPax ? `${totalPax}名` : '', leaderNote].filter(Boolean).join('　');
 
   modalGuestName.value = cell.guestName || '';
+  modalNights.value = cell.nights || 1;
   modalSite.value = cell.site || '';
   modalAmount.value = cell.amount || '';
   modalAdults.value = cell.adults || 0;
@@ -444,6 +446,7 @@ async function saveModalFields() {
   modalInfants.value = i;
   await saveCell(currentModalRoom, {
     guestName: modalGuestName.value,
+    nights: parseInt(modalNights.value, 10) || 1,
     site: modalSite.value,
     amount: parseInt(modalAmount.value, 10) || 0,
     adults: a,
@@ -478,7 +481,7 @@ async function saveCell(roomNo, fields, { keepModalOpen = false } = {}) {
   }
 }
 
-// モーダルを開いたまま裏のタィル一覧・集計表だけ再描画する
+// モーダルを開いたまま裏のタイル一覧・集計表だけ再描画する
 function renderTilesOnly() {
   const scrollY = app.scrollTop;
   app.innerHTML = '';
@@ -490,6 +493,7 @@ function renderTilesOnly() {
 }
 
 modalGuestName.addEventListener('blur', saveModalFields);
+modalNights.addEventListener('change', saveModalFields);
 modalSite.addEventListener('blur', saveModalFields);
 modalAmount.addEventListener('blur', saveModalFields);
 modalAdults.addEventListener('change', saveModalFields);
@@ -513,6 +517,19 @@ modalLockBtn.addEventListener('click', async () => {
     renderTilesOnly();
     updateLockButton(nextLocked);
     setSaveStatus('更新しました ✓');
+
+    // 固定と同時に、何泊分かが自動で翌日以降にも反映された場合はその結果を知らせる
+    const prop = data.propagation;
+    if (prop && (prop.propagatedDates.length || prop.skippedDates.length)) {
+      let msg = '';
+      if (prop.propagatedDates.length) {
+        msg += `${roomLabel(currentModalRoom)}号室を${prop.propagatedDates.join(', ')}にも同内容で反映・固定しました。`;
+      }
+      if (prop.skippedDates.length) {
+        msg += `\n以下の日は既に別の予約で固定されていたため反映をスキップしました: ${prop.skippedDates.join(', ')}`;
+      }
+      alert(msg);
+    }
   } catch (e) {
     setSaveStatus('エラー: ' + e.message, false);
   }
@@ -592,7 +609,7 @@ el('#csvFile').addEventListener('change', async (e) => {
     setSaveStatus(`取込完了(${data.count}件)`);
     let msg = `予約${data.count}件を読み込みました。\n対象日: ${data.dates.slice(0, 5).join(', ')}${data.dates.length > 5 ? ' 他' : ''}`;
     if (data.cancelledCount) {
-      msg += `\n\nキャンセル検出: ${data.cancelledCount}'[�`;
+      msg += `\n\nキャンセル検出: ${data.cancelledCount}件`;
       if (data.vacated && data.vacated.length) {
         msg += `\n以下を空室化しました:\n` + data.vacated.map((v) => `  ${v.date} ${v.roomNo}号室 (${v.guestName || ''})`).join('\n');
       }
@@ -757,7 +774,7 @@ function renderMealDayBlock(dayData) {
   return block;
 }
 
-// 3日分の食事管理表を1枚のA4縦ページにまとる
+// 3日分の食事管理表を1枚のA4縦ページにまとめる
 function renderMealThreeDayPage(daysData) {
   const page = document.createElement('div');
   page.className = 'day-page meal-day-page';

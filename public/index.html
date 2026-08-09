@@ -72,9 +72,26 @@
       <button id="modalCancelBtn" class="cancel-btn">⚠ キャンセル・空室化</button>
       <button id="modalLockBtn" class="lock-btn"></button>
 
-      <div class="modal-field">
-        <label>お名前</label>
-        <input id="modalGuestName" placeholder="（空室）">
+      <div class="modal-row name-nights-row">
+        <div class="modal-field name-field">
+          <label>お名前</label>
+          <input id="modalGuestName" placeholder="（空室）">
+        </div>
+        <div class="modal-field nights-field">
+          <label>何泊</label>
+          <select id="modalNights">
+            <option value="1">1泊</option>
+            <option value="2">2泊</option>
+            <option value="3">3泊</option>
+            <option value="4">4泊</option>
+            <option value="5">5泊</option>
+            <option value="6">6泊</option>
+            <option value="7">7泊</option>
+            <option value="8">8泊</option>
+            <option value="9">9泊</option>
+            <option value="10">10泊</option>
+          </select>
+        </div>
       </div>
       <div class="modal-row">
         <div class="modal-field">

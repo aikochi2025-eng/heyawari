@@ -163,6 +163,11 @@ main { padding: 8px 16px 4px; }
 .modal-row { display: flex; gap: 8px; }
 .modal-row .modal-field { flex: 1; }
 .pax-fields .modal-field input { text-align: center; }
+.name-nights-row .name-field { flex: 3; }
+.name-nights-row .nights-field { flex: 1; min-width: 78px; }
+.name-nights-row .nights-field select {
+  width: 100%; padding: 7px 6px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; font-family: inherit; background: #fff;
+}
 
 .meal-category { margin: 14px 0; }
 .meal-category-title { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
