@@ -328,12 +328,17 @@ async function updateCellManual(dateStr, roomNo, fields) {
   const now = new Date().toISOString();
   if (existing.rows.length === 0) {
     ({ adults, children, infants } = applyTotalCap(adults || 0, children || 0, infants || 0, cap));
+    // チェックイン日は予約情報（CSV取込）にのみ由来し、モーダルからは送られてこない
+    // （UIのチェックイン欄は変更不可のため）。予約に紐づかない完全手動の新規部屋は、
+    // 初回保存時点でこの日付(dateStr)をチェックイン日として確定させ、以降の連泊自動反映
+    // (propagateNightsForward)の泊数カウントの基準日として使う。
+    const checkin = fields.checkin || dateStr;
     await client.execute({
-      sql: `INSERT INTO assignments (date, room_no, guest_name, site, amount, plan_label, adults, children, infants, memo, meal_counts, nights, needs_review, review_reason, is_manual, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)`,
+      sql: `INSERT INTO assignments (date, room_no, guest_name, site, amount, plan_label, adults, children, infants, memo, meal_counts, checkin, nights, needs_review, review_reason, is_manual, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)`,
       args: [
         dateStr, roomNo, fields.guestName || null, fields.site || null, fields.amount || 0, fields.planLabel || null,
-        adults || 0, children || 0, infants || 0, fields.memo || null, mealCountsJson || '{}', nights || 1,
+        adults || 0, children || 0, infants || 0, fields.memo || null, mealCountsJson || '{}', checkin, nights || 1,
         fields.needsReview ? 1 : 0, fields.reviewReason || null, now,
       ],
     });
@@ -383,13 +388,20 @@ async function propagateNightsForward(dateStr, roomNo) {
   const nights = src.nights || 1;
   if (nights <= 1) return { propagatedDates: [], skippedDates: [] };
 
+  // 泊数は「固定した日」からではなく「チェックイン日」から数える。こうしないと、連泊2日目以降
+  // (チェックイン日ではない日)で固定した際に、そこから改めてnights-1日分を反映してしまい、
+  // 実際の宿泊期間を超えてチェックアウト日にまで誤って反映される（泊数の重複）バグが起きる。
+  // チェックイン日が未登録(予約に紐づかない古い手動データ等)の場合のみ、現在日を基準日とする。
+  const checkin = src.checkin || dateStr;
+  const lastNightDate = addDaysStr(checkin, nights - 1); // 最終泊の日付（チェックアウト前日）
+  if (dateStr >= lastNightDate) return { propagatedDates: [], skippedDates: [] }; // 既に最終泊以降なら反映すべき日が無い
+
   const propagatedDates = [];
   const skippedDates = [];
   const now = new Date().toISOString();
   const stmts = [];
 
-  for (let i = 1; i < nights; i++) {
-    const targetDate = addDaysStr(dateStr, i);
+  for (let targetDate = addDaysStr(dateStr, 1); targetDate <= lastNightDate; targetDate = addDaysStr(targetDate, 1)) {
     const targetRes = await client.execute({ sql: `SELECT * FROM assignments WHERE date=? AND room_no=?`, args: [targetDate, roomNo] });
     const targetRow = targetRes.rows[0];
     // 反映先に「別予約」が既に固定されている場合は上書きしない(同じ予約の延長ならそのまま更新してOK)
