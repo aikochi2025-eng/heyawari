@@ -116,12 +116,18 @@ app.put('/api/assignments/:date/swap', async (req, res) => {
 });
 
 // 固定(ロック)トグル。CSV再取込・自動生成で上書きされないようにする/戻す。
+// 固定した瞬間に「何泊」が2泊以上なら、翌日以降にも同じ部屋番号で内容を反映・固定する。
 app.put('/api/assignments/:date/:roomNo/lock', async (req, res) => {
   try {
     const locked = !!(req.body || {}).locked;
-    await db.setLocked(req.params.date, parseRoomId(req.params.roomNo), locked);
+    const roomNo = parseRoomId(req.params.roomNo);
+    await db.setLocked(req.params.date, roomNo, locked);
+    let propagation = null;
+    if (locked) {
+      propagation = await db.propagateNightsForward(req.params.date, roomNo);
+    }
     const result = await db.getAssignmentsForDate(req.params.date);
-    res.json(result);
+    res.json({ ...result, propagation });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

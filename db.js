@@ -320,6 +320,8 @@ async function updateCellManual(dateStr, roomNo, fields) {
   let adults = clamp(fields.adults, cap.adults);
   let children = clamp(fields.children, cap.children);
   let infants = clamp(fields.infants, cap.infants);
+  // 何泊(nights)は連泊の一括反映(propagateNightsForward)で使う。1〜10泊の範囲にクランプする。
+  const nights = fields.nights === undefined ? undefined : Math.max(1, Math.min(parseInt(fields.nights, 10) || 1, 10));
   const mealCountsJson = fields.mealCounts !== undefined ? JSON.stringify(fields.mealCounts || {}) : undefined;
 
   const existing = await client.execute({ sql: `SELECT * FROM assignments WHERE date=? AND room_no=?`, args: [dateStr, roomNo] });
@@ -327,11 +329,11 @@ async function updateCellManual(dateStr, roomNo, fields) {
   if (existing.rows.length === 0) {
     ({ adults, children, infants } = applyTotalCap(adults || 0, children || 0, infants || 0, cap));
     await client.execute({
-      sql: `INSERT INTO assignments (date, room_no, guest_name, site, amount, plan_label, adults, children, infants, memo, meal_counts, needs_review, review_reason, is_manual, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)`,
+      sql: `INSERT INTO assignments (date, room_no, guest_name, site, amount, plan_label, adults, children, infants, memo, meal_counts, nights, needs_review, review_reason, is_manual, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)`,
       args: [
         dateStr, roomNo, fields.guestName || null, fields.site || null, fields.amount || 0, fields.planLabel || null,
-        adults || 0, children || 0, infants || 0, fields.memo || null, mealCountsJson || '{}',
+        adults || 0, children || 0, infants || 0, fields.memo || null, mealCountsJson || '{}', nights || 1,
         fields.needsReview ? 1 : 0, fields.reviewReason || null, now,
       ],
     });
@@ -342,7 +344,7 @@ async function updateCellManual(dateStr, roomNo, fields) {
     const effInfants = infants !== undefined ? infants : cur.infants;
     const capped = applyTotalCap(effAdults || 0, effChildren || 0, effInfants || 0, cap);
     await client.execute({
-      sql: `UPDATE assignments SET guest_name=?, site=?, amount=?, plan_label=?, adults=?, children=?, infants=?, memo=?, meal_counts=?, needs_review=?, review_reason=?, updated_at=? WHERE date=? AND room_no=?`,
+      sql: `UPDATE assignments SET guest_name=?, site=?, amount=?, plan_label=?, adults=?, children=?, infants=?, memo=?, meal_counts=?, nights=?, needs_review=?, review_reason=?, updated_at=? WHERE date=? AND room_no=?`,
       args: [
         fields.guestName !== undefined ? fields.guestName : cur.guest_name,
         fields.site !== undefined ? fields.site : cur.site,
@@ -353,12 +355,71 @@ async function updateCellManual(dateStr, roomNo, fields) {
         capped.infants,
         fields.memo !== undefined ? fields.memo : cur.memo,
         mealCountsJson !== undefined ? mealCountsJson : cur.meal_counts,
+        nights !== undefined ? nights : cur.nights,
         fields.needsReview !== undefined ? (fields.needsReview ? 1 : 0) : cur.needs_review,
         fields.reviewReason !== undefined ? fields.reviewReason : cur.review_reason,
         now, dateStr, roomNo,
       ],
     });
   }
+}
+
+function addDaysStr(dateStr, n) {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+// 固定(ロック)した部屋の「何泊」設定に基づき、翌日以降(2泊目〜)にも同じ部屋番号で
+// 同内容(お名前・サイト・金額・人数・泊数)を反映し、あわせて固定(is_manual=1)する。
+// これにより連泊のお客様を1日ごとに手動で入力し直す必要がなくなる。
+// 反映先の日に「別の予約」が既に固定されている場合は上書きせずスキップし、その日付を返す
+// (誤って他のお客様の固定を壊さないため)。食事集計・メモは日ごとに内容が変わりうるため
+// 空欄のまま反映する(必要なら各日ごとにスタッフが入力する)。
+async function propagateNightsForward(dateStr, roomNo) {
+  const existing = await client.execute({ sql: `SELECT * FROM assignments WHERE date=? AND room_no=?`, args: [dateStr, roomNo] });
+  if (existing.rows.length === 0) return { propagatedDates: [], skippedDates: [] };
+  const src = existing.rows[0];
+  const nights = src.nights || 1;
+  if (nights <= 1) return { propagatedDates: [], skippedDates: [] };
+
+  const propagatedDates = [];
+  const skippedDates = [];
+  const now = new Date().toISOString();
+  const stmts = [];
+
+  for (let i = 1; i < nights; i++) {
+    const targetDate = addDaysStr(dateStr, i);
+    const targetRes = await client.execute({ sql: `SELECT * FROM assignments WHERE date=? AND room_no=?`, args: [targetDate, roomNo] });
+    const targetRow = targetRes.rows[0];
+    // 反映先に「別予約」が既に固定されている場合は上書きしない(同じ予約の延長ならそのまま更新してOK)
+    if (targetRow && targetRow.is_manual && targetRow.reservation_id && src.reservation_id && targetRow.reservation_id !== src.reservation_id) {
+      skippedDates.push(targetDate);
+      continue;
+    }
+    if (targetRow && targetRow.is_manual && !targetRow.reservation_id && targetRow.guest_name && targetRow.guest_name !== src.guest_name) {
+      skippedDates.push(targetDate);
+      continue;
+    }
+    stmts.push({
+      sql: `INSERT INTO assignments
+        (date, room_no, reservation_id, guest_name, site, amount, plan_label, plan_name_raw, adults, children, infants, memo, meal_counts, checkin, checkout, nights, needs_review, review_reason, group_key, is_continuing, is_leader, is_manual, updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)
+        ON CONFLICT(date, room_no) DO UPDATE SET
+          reservation_id=excluded.reservation_id, guest_name=excluded.guest_name, site=excluded.site, amount=excluded.amount,
+          plan_label=excluded.plan_label, plan_name_raw=excluded.plan_name_raw, adults=excluded.adults, children=excluded.children,
+          infants=excluded.infants, nights=excluded.nights, is_manual=1, updated_at=excluded.updated_at`,
+      args: [
+        targetDate, roomNo, src.reservation_id, src.guest_name, src.site, src.amount,
+        src.plan_label, src.plan_name_raw, src.adults, src.children, src.infants,
+        null, '{}', src.checkin, src.checkout, nights,
+        0, null, src.group_key, 0, 1, now,
+      ],
+    });
+    propagatedDates.push(targetDate);
+  }
+  if (stmts.length) await client.batch(stmts, 'write');
+  return { propagatedDates, skippedDates };
 }
 
 // 固定(ロック)の明示的な切り替え。固定すると次回のCSV取込→自動生成で上書きされなくなる。
@@ -452,6 +513,7 @@ module.exports = {
   getLockedRoomsForDate,
   saveAssignments,
   updateCellManual,
+  propagateNightsForward,
   setLocked,
   swapRooms,
   clearCell,
