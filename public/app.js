@@ -344,6 +344,7 @@ const modalOverlay = el('#roomModal');
 const modalTitle = el('#modalRoomTitle');
 const modalSub = el('#modalRoomSub');
 const modalGuestName = el('#modalGuestName');
+const modalCheckin = el('#modalCheckin');
 const modalNights = el('#modalNights');
 const modalSite = el('#modalSite');
 const modalAmount = el('#modalAmount');
@@ -369,6 +370,11 @@ function openModal(roomNo) {
   modalSub.textContent = [cell.reservationNo || '予約番未登録', totalPax ? `${totalPax}名` : '', leaderNote].filter(Boolean).join('　');
 
   modalGuestName.value = cell.guestName || '';
+  // チェックイン日は予約情報（CSV取込）から来る値をそのまま表示する。予約に紐づかない
+  // 手動作成の部屋の場合は、今画面で見ている日付を基準日として初回保存時にサーバー側で
+  // 設定される（後述updateCellManual）ため、未保存の新規部屋ではその日付を仮表示する。
+  // このフィールドはdisabledのため、ユーザー操作では変更されない（変更不可の要件）。
+  modalCheckin.value = cell.checkin || currentDate;
   modalNights.value = cell.nights || 1;
   modalSite.value = cell.site || '';
   modalAmount.value = cell.amount || '';
