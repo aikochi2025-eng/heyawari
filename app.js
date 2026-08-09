@@ -344,6 +344,7 @@ const modalOverlay = el('#roomModal');
 const modalTitle = el('#modalRoomTitle');
 const modalSub = el('#modalRoomSub');
 const modalGuestName = el('#modalGuestName');
+const modalNights = el('#modalNights');
 const modalSite = el('#modalSite');
 const modalAmount = el('#modalAmount');
 const modalAdults = el('#modalAdults');
@@ -368,6 +369,7 @@ function openModal(roomNo) {
   modalSub.textContent = [cell.reservationNo || '予約番未登録', totalPax ? `${totalPax}名` : '', leaderNote].filter(Boolean).join('　');
 
   modalGuestName.value = cell.guestName || '';
+  modalNights.value = cell.nights || 1;
   modalSite.value = cell.site || '';
   modalAmount.value = cell.amount || '';
   modalAdults.value = cell.adults || 0;
@@ -444,6 +446,7 @@ async function saveModalFields() {
   modalInfants.value = i;
   await saveCell(currentModalRoom, {
     guestName: modalGuestName.value,
+    nights: parseInt(modalNights.value, 10) || 1,
     site: modalSite.value,
     amount: parseInt(modalAmount.value, 10) || 0,
     adults: a,
@@ -490,6 +493,7 @@ function renderTilesOnly() {
 }
 
 modalGuestName.addEventListener('blur', saveModalFields);
+modalNights.addEventListener('change', saveModalFields);
 modalSite.addEventListener('blur', saveModalFields);
 modalAmount.addEventListener('blur', saveModalFields);
 modalAdults.addEventListener('change', saveModalFields);
@@ -513,6 +517,19 @@ modalLockBtn.addEventListener('click', async () => {
     renderTilesOnly();
     updateLockButton(nextLocked);
     setSaveStatus('更新しました ✓');
+
+    // 固定と同時に、何泊分かが自動で翌日以降にも反映された場合はその結果を知らせる
+    const prop = data.propagation;
+    if (prop && (prop.propagatedDates.length || prop.skippedDates.length)) {
+      let msg = '';
+      if (prop.propagatedDates.length) {
+        msg += `${roomLabel(currentModalRoom)}号室を${prop.propagatedDates.join(', ')}にも同内容で反映・固定しました。`;
+      }
+      if (prop.skippedDates.length) {
+        msg += `\n以下の日は既に別の予約で固定されていたため反映をスキップしました: ${prop.skippedDates.join(', ')}`;
+      }
+      alert(msg);
+    }
   } catch (e) {
     setSaveStatus('エラー: ' + e.message, false);
   }

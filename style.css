@@ -163,6 +163,11 @@ main { padding: 8px 16px 4px; }
 .modal-row { display: flex; gap: 8px; }
 .modal-row .modal-field { flex: 1; }
 .pax-fields .modal-field input { text-align: center; }
+.name-nights-row .name-field { flex: 3; }
+.name-nights-row .nights-field { flex: 1; min-width: 78px; }
+.name-nights-row .nights-field select {
+  width: 100%; padding: 7px 6px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; font-family: inherit; background: #fff;
+}
 
 .meal-category { margin: 14px 0; }
 .meal-category-title { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
@@ -291,12 +296,15 @@ main { padding: 8px 16px 4px; }
   padding: 2px 1px;
   position: static; /* 印刷ページ内ではstickyは不要・位置崩れ防止のため無効化 */
   overflow: hidden;
+  white-space: normal; /* 親の.meal-summary-tableはnowrapだが、印刷表では折り返して縮小せずはみ出しを防ぐ */
+  word-break: break-all;
+  line-height: 1.15;
 }
 .meal-print-table .mst-item { text-align: left; }
 /* メニュー名の列(左端・右端2列)は文字が入るぶん幅広く、部屋番号の列は狭くして
    部屋数が多くても「満足コース」等の文字がはみ出さないようにする */
-.meal-print-table th:first-child, .meal-print-table td:first-child { width: 8%; font-size: 7px; }
-.meal-print-table th:nth-last-child(2), .meal-print-table td:nth-last-child(2) { width: 7%; font-size: 7px; }
+.meal-print-table th:first-child, .meal-print-table td:first-child { width: 11%; font-size: 7px; }
+.meal-print-table th:nth-last-child(2), .meal-print-table td:nth-last-child(2) { width: 9%; font-size: 7px; }
 .meal-print-table th:last-child, .meal-print-table td:last-child { width: 4%; }
 
 @media print {
