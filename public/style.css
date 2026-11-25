@@ -319,3 +319,6 @@ main { padding: 8px 16px 4px; }
   .floor-grid { grid-template-columns: repeat(4, minmax(0,1fr)); }
   .floor-grid.lockup-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
+
+.topbar-user { display: flex; align-items: center; gap: 8px; color: #fff; font-size: 14px; white-space: nowrap; }
+.topbar-user button { padding: 6px 10px; font-size: 13px; border: 1px solid #fff; border-radius: 6px; background: transparent; color: #fff; cursor: pointer; }

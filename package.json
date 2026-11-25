@@ -4,7 +4,8 @@
   "description": "柏島ヴィレッジ 自動部屋割り君 - ねっぱんCSVから部屋割り表を自動生成するWebアプリ",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"

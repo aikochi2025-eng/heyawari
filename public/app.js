@@ -50,11 +50,18 @@ function setSaveStatus(text, ok = true) {
   if (text) setTimeout(() => { if (saveStatus.textContent === text) saveStatus.textContent = ''; }, 3000);
 }
 
+// セッション切れ（401）になったら、ログイン画面へ戻す
+function redirectToLogin() {
+  location.href = '/login.html';
+  throw new Error('ログインが必要です。ログイン画面に移動します');
+}
+
 async function api(path, opts = {}) {
   const res = await fetch(path, {
     headers: opts.body ? { 'Content-Type': 'application/json' } : undefined,
     ...opts,
   });
+  if (res.status === 401) redirectToLogin();
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || 'エラーが発生しました');
@@ -610,6 +617,7 @@ el('#csvFile').addEventListener('change', async (e) => {
   setSaveStatus('アップロード中...');
   try {
     const res = await fetch('/api/upload', { method: 'POST', body: fd });
+    if (res.status === 401) redirectToLogin();
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     setSaveStatus(`取込完了(${data.count}件)`);
@@ -814,6 +822,13 @@ el('#mealBackToEditBtn').addEventListener('click', () => {
   mealSummaryEl.hidden = false;
 });
 el('#mealPrintBtn').addEventListener('click', () => window.print());
+
+// ログイン中のスタッフ名の表示とログアウト
+api('/api/me').then((me) => { el('#staffName').textContent = `${me.name} さん`; }).catch(() => {});
+el('#logoutBtn').addEventListener('click', async () => {
+  await fetch('/api/logout', { method: 'POST' }).catch(() => {});
+  location.href = '/login.html';
+});
 
 // 初期表示（食事カテゴリ一覧を先に取得してからグリッドを描画する）
 currentDate = datePicker.value;
