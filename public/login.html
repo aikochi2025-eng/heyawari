@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ログイン｜部屋割り管理</title>
+<style>
+  body { font-family: -apple-system, "Hiragino Sans", "Yu Gothic", sans-serif; background: #f4f6f8; margin: 0; display: flex; min-height: 100vh; align-items: center; justify-content: center; }
+  .card { background: #fff; padding: 28px 24px; border-radius: 10px; width: min(360px, 92vw); box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+  h1 { font-size: 18px; margin: 0 0 18px; }
+  label { display: block; font-size: 13px; color: #555; margin-top: 12px; }
+  input { width: 100%; padding: 10px; font-size: 16px; border: 1px solid #ccd; border-radius: 6px; margin-top: 4px; box-sizing: border-box; }
+  button { margin-top: 18px; width: 100%; padding: 12px; font-size: 16px; border: 0; border-radius: 6px; background: #2c5f7a; color: #fff; cursor: pointer; }
+  button:disabled { opacity: .6; }
+  .error { color: #b00020; font-size: 14px; margin-top: 12px; min-height: 1em; }
+</style>
+</head>
+<body>
+<form class="card" id="loginForm" autocomplete="on">
+  <h1>柏島ヴィレッジ　部屋割り管理</h1>
+  <label>ログインID
+    <input type="text" id="username" name="username" autocomplete="username" required autofocus>
+  </label>
+  <label>パスワード
+    <input type="password" id="password" name="password" autocomplete="current-password" required>
+  </label>
+  <button type="submit" id="submitBtn">ログイン</button>
+  <div class="error" id="errorMsg" role="alert"></div>
+</form>
+<script>
+  const form = document.getElementById('loginForm');
+  const errorMsg = document.getElementById('errorMsg');
+  const submitBtn = document.getElementById('submitBtn');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorMsg.textContent = '';
+    submitBtn.disabled = true;
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: document.getElementById('username').value,
+          password: document.getElementById('password').value,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'ログインに失敗しました');
+      location.href = '/';
+    } catch (err) {
+      errorMsg.textContent = err.message;
+      document.getElementById('password').value = '';
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

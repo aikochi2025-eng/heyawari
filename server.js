@@ -8,9 +8,36 @@ const { generateForDate } = require('./logic/generate');
 const { PLAN_LABELS } = require('./logic/classify');
 const { MEAL_CATEGORIES } = require('./logic/mealItems');
 
+const { currentStaff, requireAuth, login, logout } = require('./auth');
+
 const app = express();
+app.set('trust proxy', 1); // Render等のリバースプロキシ越しでもhttpsを判定できるようにする
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// ログイン不要で開けるのはログイン画面・認証API・ヘルスチェックだけ
+const PUBLIC_API = new Set(['/login', '/logout', '/health']);
+
+// 画面（index.html）はログイン済みの場合だけ返す。未ログインはログイン画面へ。
+app.get(['/', '/index.html'], async (req, res) => {
+  try {
+    const staff = await currentStaff(req);
+    if (!staff) return res.redirect('/login.html');
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  } catch (e) {
+    res.status(500).send('エラーが発生しました');
+  }
+});
+
+// 静的ファイル（ログイン画面・JS・CSS）。index.html は上のルートでのみ返す。
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
+
+app.post('/api/login', login);
+app.post('/api/logout', logout);
+
+// /api 配下は、公開指定以外すべてログイン必須（予約の読み書きを含む）
+app.use('/api', (req, res, next) => (PUBLIC_API.has(req.path) ? next() : requireAuth(req, res, next)));
+
+app.get('/api/me', (req, res) => res.json({ username: req.staff.username, name: req.staff.display_name }));
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -176,11 +203,14 @@ app.get('/api/meal-items', (req, res) => res.json({ categories: MEAL_CATEGORIES 
 
 app.get('/api/health', (req, res) => res.json({ ok: true, today: today() }));
 
-const PORT = process.env.PORT || 3000;
+module.exports = { app };
 
-db.init().then(() => {
-  app.listen(PORT, () => console.log(`自動部屋割り君 listening on :${PORT}`));
-}).catch((e) => {
-  console.error('DB init failed', e);
-  process.exit(1);
-});
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  db.init().then(() => {
+    app.listen(PORT, () => console.log(`自動部屋割り君 listening on :${PORT}`));
+  }).catch((e) => {
+    console.error('DB init failed', e);
+    process.exit(1);
+  });
+}

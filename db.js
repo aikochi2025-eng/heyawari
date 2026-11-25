@@ -70,6 +70,19 @@ async function init() {
       key TEXT PRIMARY KEY,
       value TEXT
     )`,
+    `CREATE TABLE IF NOT EXISTS staff (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      display_name TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS sessions (
+      token_hash TEXT PRIMARY KEY,
+      staff_id INTEGER NOT NULL,
+      expires_at TEXT NOT NULL
+    )`,
   ], 'write');
   // 既存DBに対する簡易マイグレーション（列が無ければ追加。既にあればエラーを無視）
   const migrations = [
@@ -514,8 +527,77 @@ async function listDatesWithAssignments() {
   return res.rows.map((r) => r.date);
 }
 
+// ---- スタッフ・ログインセッション ----
+
+async function getStaffByUsername(username) {
+  const r = await client.execute({ sql: 'SELECT * FROM staff WHERE username = ?', args: [username] });
+  return r.rows[0] || null;
+}
+
+async function createStaff(username, displayName, passwordHash) {
+  await client.execute({
+    sql: 'INSERT INTO staff (username, display_name, password_hash, active, created_at) VALUES (?, ?, ?, 1, ?)',
+    args: [username, displayName, passwordHash, new Date().toISOString()],
+  });
+}
+
+async function updateStaff(username, fields) {
+  const sets = [];
+  const args = [];
+  if (fields.active !== undefined) { sets.push('active = ?'); args.push(fields.active ? 1 : 0); }
+  if (fields.passwordHash !== undefined) { sets.push('password_hash = ?'); args.push(fields.passwordHash); }
+  if (!sets.length) return;
+  args.push(username);
+  await client.execute({ sql: `UPDATE staff SET ${sets.join(', ')} WHERE username = ?`, args });
+  if (fields.active === false || fields.passwordHash !== undefined) {
+    // 無効化・パスワード変更時は、そのスタッフの既存セッションを即時に失効させる
+    const s = await getStaffByUsername(username);
+    if (s) await client.execute({ sql: 'DELETE FROM sessions WHERE staff_id = ?', args: [s.id] });
+  }
+}
+
+async function listStaff() {
+  const r = await client.execute('SELECT id, username, display_name, active, created_at FROM staff ORDER BY id');
+  return r.rows;
+}
+
+async function createSession(tokenHash, staffId, expiresAt) {
+  await client.execute({
+    sql: 'INSERT INTO sessions (token_hash, staff_id, expires_at) VALUES (?, ?, ?)',
+    args: [tokenHash, staffId, expiresAt],
+  });
+}
+
+// 有効期限内・かつ有効なスタッフのセッションだけ返す
+async function getSessionStaff(tokenHash, nowIso) {
+  const r = await client.execute({
+    sql: `SELECT s.id, s.username, s.display_name, s.active
+          FROM sessions se JOIN staff s ON s.id = se.staff_id
+          WHERE se.token_hash = ? AND se.expires_at > ? AND s.active = 1`,
+    args: [tokenHash, nowIso],
+  });
+  const row = r.rows[0];
+  return row ? { id: row.id, username: row.username, display_name: row.display_name, active: row.active } : null;
+}
+
+async function deleteSession(tokenHash) {
+  await client.execute({ sql: 'DELETE FROM sessions WHERE token_hash = ?', args: [tokenHash] });
+}
+
+async function deleteExpiredSessions(nowIso) {
+  await client.execute({ sql: 'DELETE FROM sessions WHERE expires_at <= ?', args: [nowIso] });
+}
+
 module.exports = {
   init,
+  getStaffByUsername,
+  createStaff,
+  updateStaff,
+  listStaff,
+  createSession,
+  getSessionStaff,
+  deleteSession,
+  deleteExpiredSessions,
   upsertReservations,
   cancelReservations,
   getActiveReservations,
